@@ -1,0 +1,7 @@
+*.png
+*.ogg
+*.wav
+*.md
+build/
+assets/sprites
+assets/audio

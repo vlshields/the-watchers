@@ -12,6 +12,9 @@ Game_State :: struct {
 	camera:        raylib.Camera2D,
 	player:        Player,
 	spear:         Spear,
+	enemies:       [MAX_ENEMIES]Enemy,
+	enemy_count:   int,
+	combat:        Combat_State,
 	render_target: raylib.RenderTexture2D,
 	screen_scale:  f32,
 	screen_offset: raylib.Vector2,
@@ -152,6 +155,8 @@ init :: proc() {
 
 	init_player(&gs.player, spawn_pos)
 	init_spear(&gs.spear)
+	init_enemies(&gs.enemies, &gs.enemy_count, &gs.map_data)
+	init_combat(&gs.combat)
 
 	gs.camera = raylib.Camera2D{
 		zoom   = CAMERA_ZOOM,
@@ -170,6 +175,8 @@ update :: proc() {
 
 	update_player(&gs.player, &gs.map_data, dt)
 	update_spear(&gs.spear, &gs.player, dt)
+	update_enemies(&gs.enemies, gs.enemy_count, dt)
+	update_combat(&gs.combat, &gs.player, &gs.spear, &gs.enemies, gs.enemy_count, dt)
 	update_camera(dt)
 
 	// Draw to virtual render target
@@ -178,9 +185,13 @@ update :: proc() {
 
 	raylib.BeginMode2D(gs.camera)
 	draw_map()
+	draw_enemies(&gs.enemies, gs.enemy_count)
 	draw_player(&gs.player)
 	draw_spear(&gs.spear, &gs.player)
+	draw_combat(&gs.combat, &gs.enemies, gs.enemy_count)
 	raylib.EndMode2D()
+
+	draw_hud(&gs.player)
 
 	raylib.EndTextureMode()
 
@@ -205,6 +216,8 @@ should_run :: proc() -> bool {
 shutdown :: proc() {
 	raylib.UnloadRenderTexture(gs.render_target)
 	unload_map_data()
+	unload_combat()
+	unload_enemies()
 	unload_spear(&gs.spear)
 	unload_player(&gs.player)
 	raylib.CloseWindow()
@@ -290,7 +303,7 @@ draw_map :: proc() {
 			draw_x := f32(cx) * TILE_SIZE
 			draw_y := f32(ry) * TILE_SIZE
 
-			if cell.symbol == '.' || cell.symbol == 's' {
+			if cell.symbol == '.' || cell.symbol == 's' || cell.symbol == 'c' {
 				continue
 			}
 

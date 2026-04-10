@@ -7,6 +7,8 @@ Spear_State :: enum {
 	Spawning,
 	Idle,
 	Despawning,
+	Throwing,
+	Returning,
 }
 
 Spear :: struct {
@@ -86,11 +88,13 @@ update_spear :: proc(s: ^Spear, p: ^Player, dt: f32) {
 			s.current_frame = 0
 			s.anim_timer = 0
 		}
+	case .Throwing, .Returning:
+		return
 	}
 }
 
 draw_spear :: proc(s: ^Spear, p: ^Player) {
-	if s.state == .Inactive {
+	if s.state == .Inactive || s.state == .Throwing || s.state == .Returning {
 		return
 	}
 
@@ -111,7 +115,7 @@ draw_spear :: proc(s: ^Spear, p: ^Player) {
 			tex = s.idle_tex
 			frames = s.idle_frames
 		}
-	case .Inactive:
+	case .Inactive, .Throwing, .Returning:
 		return
 	}
 

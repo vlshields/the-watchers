@@ -49,6 +49,36 @@ input_spear_toggle :: proc() -> bool {
 	return false
 }
 
+input_attack :: proc() -> bool {
+	if raylib.IsKeyPressed(.J) {
+		return true
+	}
+	if gamepad_active() && raylib.IsGamepadButtonPressed(GAMEPAD_ID, .RIGHT_FACE_LEFT) {
+		return true
+	}
+	return false
+}
+
+input_target_hold :: proc() -> bool {
+	if raylib.IsKeyDown(.K) {
+		return true
+	}
+	if gamepad_active() && raylib.GetGamepadAxisMovement(GAMEPAD_ID, .LEFT_TRIGGER) > 0.5 {
+		return true
+	}
+	return false
+}
+
+input_cycle_target :: proc() -> bool {
+	if raylib.IsKeyPressed(.H) {
+		return true
+	}
+	if gamepad_active() && raylib.IsGamepadButtonPressed(GAMEPAD_ID, .RIGHT_TRIGGER_1) {
+		return true
+	}
+	return false
+}
+
 input_move_down :: proc() -> bool {
 	if raylib.IsKeyDown(.S) || raylib.IsKeyDown(.DOWN) {
 		return true

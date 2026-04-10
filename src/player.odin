@@ -6,14 +6,17 @@ import dm "../dotmap"
 Player :: struct {
 	pos:               raylib.Vector2, // bottom-center
 	vel:               raylib.Vector2,
+	hp:                int,
 	on_ground:         bool,
 	jumps_left:        int,
 	facing_left:       bool,
 	moving:            bool,
+	is_throwing:       bool,
 	move_tex:          raylib.Texture2D,
 	idle_tex:          raylib.Texture2D,
 	jump_tex:          raylib.Texture2D,
 	fall_tex:          raylib.Texture2D,
+	throw_tex:         raylib.Texture2D,
 	frame_count:       int,
 	idle_frames:       int,
 	jump_frames:       int,
@@ -25,6 +28,7 @@ Player :: struct {
 init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
 	p.pos = spawn
 	p.vel = {}
+	p.hp = PLAYER_MAX_HP
 	p.on_ground = false
 	p.jumps_left = MAX_JUMPS
 	p.facing_left = false
@@ -36,6 +40,7 @@ init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
 	p.idle_tex = raylib.LoadTexture("assets/sprites/player_idle.png")
 	p.jump_tex = raylib.LoadTexture("assets/sprites/player_jump.png")
 	p.fall_tex = raylib.LoadTexture("assets/sprites/player_falling.png")
+	p.throw_tex = raylib.LoadTexture("assets/sprites/player_throws_spear.png")
 	p.frame_count = int(p.move_tex.width) / SPRITE_SRC_SIZE
 	p.idle_frames = int(p.idle_tex.width) / SPRITE_SRC_SIZE
 	p.jump_frames = int(p.jump_tex.width) / SPRITE_SRC_SIZE
@@ -47,6 +52,7 @@ unload_player :: proc(p: ^Player) {
 	raylib.UnloadTexture(p.idle_tex)
 	raylib.UnloadTexture(p.jump_tex)
 	raylib.UnloadTexture(p.fall_tex)
+	raylib.UnloadTexture(p.throw_tex)
 }
 
 update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
@@ -128,7 +134,9 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 draw_player :: proc(p: ^Player) {
 	tex: raylib.Texture2D
 
-	if !p.on_ground {
+	if p.is_throwing {
+		tex = p.throw_tex
+	} else if !p.on_ground {
 		tex = (p.vel.y < 0) ? p.jump_tex : p.fall_tex
 	} else if p.moving {
 		tex = p.move_tex

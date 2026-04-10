@@ -14,8 +14,11 @@ Game_State :: struct {
 	spear:         Spear,
 	enemies:       [MAX_ENEMIES]Enemy,
 	enemy_count:   int,
+	psy_projs:     [MAX_PSYCHIC_PROJECTILES]Psychic_Projectile,
+	psy_proj_count: int,
 	combat:        Combat_State,
-	render_target: raylib.RenderTexture2D,
+	hit_flash_shader: raylib.Shader,
+	render_target:    raylib.RenderTexture2D,
 	screen_scale:  f32,
 	screen_offset: raylib.Vector2,
 	window_w:      i32,
@@ -163,6 +166,31 @@ init :: proc() {
 		offset = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2},
 		target = spawn_pos,
 	}
+
+	// White flash shader for player damage
+	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
+		fs :: `#version 100
+precision mediump float;
+varying vec2 fragTexCoord;
+varying vec4 fragColor;
+uniform sampler2D texture0;
+void main() {
+    vec4 texel = texture2D(texture0, fragTexCoord);
+    gl_FragColor = vec4(1.0, 1.0, 1.0, texel.a) * fragColor;
+}`
+		gs.hit_flash_shader = raylib.LoadShaderFromMemory(nil, fs)
+	} else {
+		fs :: `#version 330
+in vec2 fragTexCoord;
+in vec4 fragColor;
+uniform sampler2D texture0;
+out vec4 finalColor;
+void main() {
+    vec4 texel = texture(texture0, fragTexCoord);
+    finalColor = vec4(1.0, 1.0, 1.0, texel.a) * fragColor;
+}`
+		gs.hit_flash_shader = raylib.LoadShaderFromMemory(nil, fs)
+	}
 }
 
 update :: proc() {
@@ -175,7 +203,16 @@ update :: proc() {
 
 	update_player(&gs.player, &gs.map_data, dt)
 	update_spear(&gs.spear, &gs.player, dt)
-	update_enemies(&gs.enemies, gs.enemy_count, dt)
+	update_enemies(
+		&gs.enemies,
+		gs.enemy_count,
+		&gs.map_data,
+		&gs.player,
+		&gs.psy_projs,
+		&gs.psy_proj_count,
+		dt,
+	)
+	update_psychic_projectiles(&gs.psy_projs, &gs.psy_proj_count, &gs.player, &gs.map_data, dt)
 	update_combat(&gs.combat, &gs.player, &gs.spear, &gs.enemies, gs.enemy_count, dt)
 	update_camera(dt)
 
@@ -186,7 +223,15 @@ update :: proc() {
 	raylib.BeginMode2D(gs.camera)
 	draw_map()
 	draw_enemies(&gs.enemies, gs.enemy_count)
+	draw_psychic_projectiles(&gs.psy_projs, gs.psy_proj_count)
+	player_flashing := gs.player.hit_timer > 0 && int(gs.player.hit_timer / 0.05) % 2 == 0
+	if player_flashing {
+		raylib.BeginShaderMode(gs.hit_flash_shader)
+	}
 	draw_player(&gs.player)
+	if player_flashing {
+		raylib.EndShaderMode()
+	}
 	draw_spear(&gs.spear, &gs.player)
 	draw_combat(&gs.combat, &gs.enemies, gs.enemy_count)
 	raylib.EndMode2D()
@@ -214,6 +259,7 @@ should_run :: proc() -> bool {
 }
 
 shutdown :: proc() {
+	raylib.UnloadShader(gs.hit_flash_shader)
 	raylib.UnloadRenderTexture(gs.render_target)
 	unload_map_data()
 	unload_combat()
@@ -303,7 +349,7 @@ draw_map :: proc() {
 			draw_x := f32(cx) * TILE_SIZE
 			draw_y := f32(ry) * TILE_SIZE
 
-			if cell.symbol == '.' || cell.symbol == 's' || cell.symbol == 'c' {
+			if cell.symbol == '.' || cell.symbol == 's' || cell.symbol == 'c' || cell.symbol == 'g' {
 				continue
 			}
 

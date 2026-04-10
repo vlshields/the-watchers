@@ -80,7 +80,7 @@ update_combat :: proc(
 		target := -1
 		if c.target_mode == .Manual && c.target_index >= 0 && c.target_index < enemy_count {
 			e := &enemies[c.target_index]
-			if e.state == .Patrol || e.state == .Hit {
+			if e.state != .Inactive && e.state != .Dead {
 				target = c.target_index
 			}
 		}
@@ -127,7 +127,7 @@ update_combat :: proc(
 		hit := false
 		if c.target_index >= 0 && c.target_index < enemy_count {
 			e := &enemies[c.target_index]
-			if e.state == .Patrol || e.state == .Hit {
+			if e.state != .Inactive && e.state != .Dead {
 				center := get_enemy_center(e)
 				dx := center.x - c.projectile_pos.x
 				dy := center.y - c.projectile_pos.y
@@ -187,7 +187,7 @@ draw_combat :: proc(c: ^Combat_State, enemies: ^[MAX_ENEMIES]Enemy, enemy_count:
 	// Targeting reticle
 	if c.target_mode != .None && c.target_index >= 0 && c.target_index < enemy_count {
 		e := &enemies[c.target_index]
-		if e.state == .Patrol || e.state == .Hit {
+		if e.state != .Inactive && e.state != .Dead {
 			center := get_enemy_center(e)
 			pulse := 1.0 + 0.15 * math.sin(f32(raylib.GetTime()) * 6.0)
 			size := 10.0 * pulse

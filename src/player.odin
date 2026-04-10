@@ -23,6 +23,7 @@ Player :: struct {
 	fall_frames:       int,
 	current_frame:     f32,
 	anim_timer:        f32,
+	hit_timer:         f32,
 }
 
 init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
@@ -55,7 +56,19 @@ unload_player :: proc(p: ^Player) {
 	raylib.UnloadTexture(p.throw_tex)
 }
 
+player_take_damage :: proc(p: ^Player, damage: int) {
+	p.hp -= damage
+	if p.hp < 0 {
+		p.hp = 0
+	}
+	p.hit_timer = PLAYER_HIT_FLASH_DURATION
+}
+
 update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
+	if p.hit_timer > 0 {
+		p.hit_timer -= dt
+	}
+
 	was_on_ground := p.on_ground
 	was_rising := p.vel.y < 0
 

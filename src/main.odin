@@ -213,7 +213,7 @@ update :: proc() {
 		dt,
 	)
 	update_psychic_projectiles(&gs.psy_projs, &gs.psy_proj_count, &gs.player, &gs.map_data, dt)
-	update_combat(&gs.combat, &gs.player, &gs.spear, &gs.enemies, gs.enemy_count, dt)
+	update_combat(&gs.combat, &gs.player, &gs.spear, &gs.map_data, &gs.enemies, gs.enemy_count, dt)
 	update_camera(dt)
 
 	// Draw to virtual render target
@@ -222,7 +222,7 @@ update :: proc() {
 
 	raylib.BeginMode2D(gs.camera)
 	draw_map()
-	draw_enemies(&gs.enemies, gs.enemy_count)
+	draw_enemies(&gs.enemies, gs.enemy_count, gs.hit_flash_shader)
 	draw_psychic_projectiles(&gs.psy_projs, gs.psy_proj_count)
 	player_flashing := gs.player.hit_timer > 0 && int(gs.player.hit_timer / 0.05) % 2 == 0
 	if player_flashing {
@@ -288,25 +288,33 @@ set_web_mouse_down :: proc(down: bool) {
 
 @(private = "file")
 update_camera :: proc(dt: f32) {
-	gs.camera.target = gs.player.pos
+	desired := gs.player.pos
 
 	map_w := f32(gs.map_data.width) * TILE_SIZE
 	map_h := f32(gs.map_data.height) * TILE_SIZE
 	half_w := f32(SCREEN_WIDTH) / (2 * gs.camera.zoom)
 	half_h := f32(SCREEN_HEIGHT) / (2 * gs.camera.zoom)
 
-	if gs.camera.target.x < half_w {
-		gs.camera.target.x = half_w
+	if desired.x < half_w {
+		desired.x = half_w
 	}
-	if gs.camera.target.x > map_w - half_w {
-		gs.camera.target.x = map_w - half_w
+	if desired.x > map_w - half_w {
+		desired.x = map_w - half_w
 	}
-	if gs.camera.target.y < half_h {
-		gs.camera.target.y = half_h
+	if desired.y < half_h {
+		desired.y = half_h
 	}
-	if gs.camera.target.y > map_h - half_h {
-		gs.camera.target.y = map_h - half_h
+	if desired.y > map_h - half_h {
+		desired.y = map_h - half_h
 	}
+
+	t := dt * CAMERA_FOLLOW_SPEED
+	if t > 1 {
+		t = 1
+	}
+	eased := raylib.EaseCubicOut(t, 0, 1, 1)
+	gs.camera.target.x += (desired.x - gs.camera.target.x) * eased
+	gs.camera.target.y += (desired.y - gs.camera.target.y) * eased
 }
 
 // ---------------------------------------------------------------------------

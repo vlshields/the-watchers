@@ -155,9 +155,19 @@ update_enemies :: proc(
 	}
 }
 
-draw_enemies :: proc(enemies: ^[MAX_ENEMIES]Enemy, count: int) {
+draw_enemies :: proc(enemies: ^[MAX_ENEMIES]Enemy, count: int, hit_flash_shader: raylib.Shader) {
 	for i in 0 ..< count {
+		ghoul_flashing := enemies[i].type == .Ghoul &&
+			enemies[i].state == .Hit &&
+			enemies[i].hit_timer > 0 &&
+			int(enemies[i].hit_timer / 0.05) % 2 == 0
+		if ghoul_flashing {
+			raylib.BeginShaderMode(hit_flash_shader)
+		}
 		draw_enemy(&enemies[i])
+		if ghoul_flashing {
+			raylib.EndShaderMode()
+		}
 	}
 }
 
@@ -246,16 +256,21 @@ update_enemy :: proc(
 				e.attack_fired = true
 				if proj_count^ < MAX_PSYCHIC_PROJECTILES {
 					center := get_enemy_center(e)
-					dx := player.pos.x - center.x
-					dy := player.pos.y - center.y
-					dist := math.sqrt(dx * dx + dy * dy)
-					if dist < 1 {
-						dist = 1
+					player_hb := get_hitbox(player)
+					target := raylib.Vector2 {
+						player_hb.x + player_hb.width / 2,
+						player_hb.y + player_hb.height / 2,
 					}
+					dx := target.x - center.x
+					dy := target.y - center.y
+					dist := math.sqrt(dx * dx + dy * dy)
 
 					travel_time := dist / PSYCHIC_SPEED
+					if travel_time < PSYCHIC_MIN_TRAVEL_TIME {
+						travel_time = PSYCHIC_MIN_TRAVEL_TIME
+					}
 					vx := dx / travel_time
-					vy := dy / travel_time - 0.5 * PSYCHIC_ARC_GRAVITY * travel_time
+					vy := (dy - 0.5 * PSYCHIC_ARC_GRAVITY * travel_time * travel_time) / travel_time
 
 					spread := (dist / ENEMY_CHERUB_ATTACK_RANGE) * 40.0
 					vx += rand.float32_range(-spread, spread)
@@ -531,7 +546,7 @@ draw_enemy :: proc(e: ^Enemy) {
 	}
 
 	tint := raylib.WHITE
-	if e.state == .Hit {
+	if e.state == .Hit && e.type == .Cherub {
 		flash := int(e.hit_timer / 0.05) % 2
 		if flash == 0 {
 			tint = raylib.Color{255, 100, 100, 255}

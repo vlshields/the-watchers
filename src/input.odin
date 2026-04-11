@@ -79,6 +79,16 @@ input_cycle_target :: proc() -> bool {
 	return false
 }
 
+input_spear_teleport :: proc() -> bool {
+	if raylib.IsKeyPressed(.I) {
+		return true
+	}
+	if gamepad_active() && raylib.IsGamepadButtonPressed(GAMEPAD_ID, .RIGHT_FACE_RIGHT) {
+		return true
+	}
+	return false
+}
+
 input_move_down :: proc() -> bool {
 	if raylib.IsKeyDown(.S) || raylib.IsKeyDown(.DOWN) {
 		return true

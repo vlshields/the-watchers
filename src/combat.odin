@@ -1,6 +1,7 @@
 package game
 
 import "vendor:raylib"
+import dm "../dotmap"
 import "core:math"
 
 Target_Mode :: enum {
@@ -50,6 +51,7 @@ update_combat :: proc(
 	c: ^Combat_State,
 	p: ^Player,
 	s: ^Spear,
+	map_data: ^dm.Dot_Map,
 	enemies: ^[MAX_ENEMIES]Enemy,
 	enemy_count: int,
 	dt: f32,
@@ -73,6 +75,20 @@ update_combat :: proc(
 
 	if c.cycle_cooldown > 0 {
 		c.cycle_cooldown -= dt
+	}
+
+	if input_spear_teleport() && spear_can_teleport(c) {
+		if teleport_player_to_spear(p, map_data, c.projectile_pos) {
+			c.throw_phase = .None
+			s.state = .Idle
+			c.spin_frame = 0
+			c.spin_timer = 0
+			p.is_throwing = false
+			if c.target_mode == .Auto {
+				c.target_mode = .None
+				c.target_index = -1
+			}
+		}
 	}
 
 	// --- Attack ---
@@ -302,4 +318,96 @@ advance_spin :: proc(c: ^Combat_State, dt: f32) {
 			c.spin_frame = 0
 		}
 	}
+}
+
+@(private = "file")
+spear_can_teleport :: proc(c: ^Combat_State) -> bool {
+	return c.throw_phase == .Flying ||
+		c.throw_phase == .Hit ||
+		c.throw_phase == .Returning
+}
+
+@(private = "file")
+teleport_player_to_spear :: proc(p: ^Player, map_data: ^dm.Dot_Map, spear_pos: raylib.Vector2) -> bool {
+	dest: raylib.Vector2
+	if !find_spear_teleport_destination(map_data, spear_pos, &dest) {
+		return false
+	}
+
+	p.pos = dest
+	p.vel = {}
+	p.on_ground = player_on_ground_at(map_data, dest)
+	p.jumps_left = p.on_ground ? MAX_JUMPS : 1
+	p.teleport_invuln_timer = PLAYER_TELEPORT_INVULN_DURATION
+	return true
+}
+
+@(private = "file")
+find_spear_teleport_destination :: proc(
+	map_data: ^dm.Dot_Map,
+	spear_pos: raylib.Vector2,
+	dest: ^raylib.Vector2,
+) -> bool {
+	base := raylib.Vector2 {
+		spear_pos.x,
+		spear_pos.y + f32(PLAYER_HITBOX_H) / 2,
+	}
+
+	if player_position_clear(map_data, base) {
+		dest^ = base
+		return true
+	}
+
+	best_pos: raylib.Vector2
+	best_score: f32 = 1e9
+	found := false
+
+	for y_off := -TELEPORT_SEARCH_RADIUS; y_off <= TELEPORT_SEARCH_RADIUS; y_off += TELEPORT_SEARCH_STEP {
+		for x_off := -TELEPORT_SEARCH_RADIUS; x_off <= TELEPORT_SEARCH_RADIUS; x_off += TELEPORT_SEARCH_STEP {
+			candidate := raylib.Vector2 {
+				base.x + f32(x_off),
+				base.y + f32(y_off),
+			}
+			if !player_position_clear(map_data, candidate) {
+				continue
+			}
+
+			score := f32(x_off * x_off + y_off * y_off)
+			if y_off > 0 {
+				score += TELEPORT_BELOW_PENALTY
+			}
+			if score < best_score {
+				best_score = score
+				best_pos = candidate
+				found = true
+			}
+		}
+	}
+
+	if found {
+		dest^ = best_pos
+	}
+	return found
+}
+
+@(private = "file")
+player_position_clear :: proc(map_data: ^dm.Dot_Map, pos: raylib.Vector2) -> bool {
+	rect := raylib.Rectangle {
+		pos.x - f32(PLAYER_HITBOX_W) / 2,
+		pos.y - f32(PLAYER_HITBOX_H),
+		f32(PLAYER_HITBOX_W),
+		f32(PLAYER_HITBOX_H),
+	}
+	return !check_rect_solid(map_data, rect)
+}
+
+@(private = "file")
+player_on_ground_at :: proc(map_data: ^dm.Dot_Map, pos: raylib.Vector2) -> bool {
+	rect := raylib.Rectangle {
+		pos.x - f32(PLAYER_HITBOX_W) / 2,
+		pos.y,
+		f32(PLAYER_HITBOX_W),
+		1,
+	}
+	return check_rect_solid(map_data, rect)
 }

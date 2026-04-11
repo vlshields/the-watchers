@@ -24,6 +24,7 @@ Player :: struct {
 	current_frame:     f32,
 	anim_timer:        f32,
 	hit_timer:         f32,
+	teleport_invuln_timer: f32,
 }
 
 init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
@@ -36,6 +37,7 @@ init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
 	p.moving = false
 	p.current_frame = 0
 	p.anim_timer = 0
+	p.teleport_invuln_timer = 0
 
 	p.move_tex = raylib.LoadTexture("assets/sprites/player_move.png")
 	p.idle_tex = raylib.LoadTexture("assets/sprites/player_idle.png")
@@ -57,6 +59,10 @@ unload_player :: proc(p: ^Player) {
 }
 
 player_take_damage :: proc(p: ^Player, damage: int) {
+	if p.teleport_invuln_timer > 0 {
+		return
+	}
+
 	p.hp -= damage
 	if p.hp < 0 {
 		p.hp = 0
@@ -67,6 +73,9 @@ player_take_damage :: proc(p: ^Player, damage: int) {
 update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 	if p.hit_timer > 0 {
 		p.hit_timer -= dt
+	}
+	if p.teleport_invuln_timer > 0 {
+		p.teleport_invuln_timer -= dt
 	}
 
 	was_on_ground := p.on_ground

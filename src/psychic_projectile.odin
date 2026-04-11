@@ -65,6 +65,13 @@ update_psychic_projectiles :: proc(
 			p.trail_len += 1
 		}
 
+		prev_pos := p.pos
+		if psychic_projectile_hits_player(prev_pos, p.pos, player) {
+			player_take_damage(player, PSYCHIC_DAMAGE)
+			p.active = false
+			continue
+		}
+
 		// Gravity arc
 		p.vel.y += PSYCHIC_ARC_GRAVITY * dt
 		p.pos.x += p.vel.x * dt
@@ -72,16 +79,8 @@ update_psychic_projectiles :: proc(
 		p.lifetime -= dt
 
 		// Hit player
-		phb := get_hitbox(player)
-		if p.pos.x >= phb.x && p.pos.x <= phb.x + phb.width &&
-			p.pos.y >= phb.y && p.pos.y <= phb.y + phb.height {
+		if psychic_projectile_hits_player(prev_pos, p.pos, player) {
 			player_take_damage(player, PSYCHIC_DAMAGE)
-			p.active = false
-			continue
-		}
-
-		// Hit solid tile
-		if check_rect_solid(map_data, {p.pos.x - 2, p.pos.y - 2, 4, 4}) {
 			p.active = false
 			continue
 		}
@@ -116,4 +115,66 @@ draw_psychic_projectiles :: proc(
 		// Core: small filled circle
 		raylib.DrawCircleV(p.pos, 2, PSY_COLOR)
 	}
+}
+
+@(private = "file")
+psychic_projectile_hits_player :: proc(from, to: raylib.Vector2, player: ^Player) -> bool {
+	hb := get_hitbox(player)
+	radius: f32 = 2
+	expanded := raylib.Rectangle {
+		hb.x - radius,
+		hb.y - radius,
+		hb.width + radius * 2,
+		hb.height + radius * 2,
+	}
+
+	return point_in_rect(from, expanded) ||
+		point_in_rect(to, expanded) ||
+		segment_intersects_rect(from, to, expanded)
+}
+
+@(private = "file")
+point_in_rect :: proc(p: raylib.Vector2, rect: raylib.Rectangle) -> bool {
+	return p.x >= rect.x && p.x <= rect.x + rect.width &&
+		p.y >= rect.y && p.y <= rect.y + rect.height
+}
+
+@(private = "file")
+segment_intersects_rect :: proc(a, b: raylib.Vector2, rect: raylib.Rectangle) -> bool {
+	t_min: f32 = 0
+	t_max: f32 = 1
+	dx := b.x - a.x
+	dy := b.y - a.y
+
+	if !clip_segment_axis(a.x, dx, rect.x, rect.x + rect.width, &t_min, &t_max) {
+		return false
+	}
+	if !clip_segment_axis(a.y, dy, rect.y, rect.y + rect.height, &t_min, &t_max) {
+		return false
+	}
+	return true
+}
+
+@(private = "file")
+clip_segment_axis :: proc(
+	start, delta, min_bound, max_bound: f32,
+	t_min, t_max: ^f32,
+) -> bool {
+	if delta == 0 {
+		return start >= min_bound && start <= max_bound
+	}
+
+	inv_delta := 1 / delta
+	t1 := (min_bound - start) * inv_delta
+	t2 := (max_bound - start) * inv_delta
+	if t1 > t2 {
+		t1, t2 = t2, t1
+	}
+	if t1 > t_min^ {
+		t_min^ = t1
+	}
+	if t2 < t_max^ {
+		t_max^ = t2
+	}
+	return t_min^ <= t_max^
 }

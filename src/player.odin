@@ -12,16 +12,19 @@ Player :: struct {
 	facing_left:       bool,
 	moving:            bool,
 	is_throwing:       bool,
+	is_teleporting:    bool,
 	move_tex:          raylib.Texture2D,
 	idle_tex:          raylib.Texture2D,
 	jump_tex:          raylib.Texture2D,
 	fall_tex:          raylib.Texture2D,
 	throw_tex:         raylib.Texture2D,
+	teleport_tex:      raylib.Texture2D,
 	frame_count:       int,
 	idle_frames:       int,
 	jump_frames:       int,
 	fall_frames:       int,
 	throw_frames:      int,
+	teleport_frames:   int,
 	current_frame:     f32,
 	anim_timer:        f32,
 	hit_timer:         f32,
@@ -36,6 +39,8 @@ init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
 	p.jumps_left = MAX_JUMPS
 	p.facing_left = false
 	p.moving = false
+	p.is_throwing = false
+	p.is_teleporting = false
 	p.current_frame = 0
 	p.anim_timer = 0
 	p.teleport_invuln_timer = 0
@@ -45,11 +50,13 @@ init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
 	p.jump_tex = raylib.LoadTexture("assets/sprites/player_jump.png")
 	p.fall_tex = raylib.LoadTexture("assets/sprites/player_falling.png")
 	p.throw_tex = raylib.LoadTexture("assets/sprites/player_throws_spear.png")
+	p.teleport_tex = raylib.LoadTexture("assets/sprites/player_teleports_to_spear.png")
 	p.frame_count = int(p.move_tex.width) / SPRITE_SRC_SIZE
 	p.idle_frames = int(p.idle_tex.width) / SPRITE_SRC_SIZE
 	p.jump_frames = int(p.jump_tex.width) / SPRITE_SRC_SIZE
 	p.fall_frames = int(p.fall_tex.width) / SPRITE_SRC_SIZE
 	p.throw_frames = int(p.throw_tex.width) / SPRITE_SRC_SIZE
+	p.teleport_frames = int(p.teleport_tex.width) / SPRITE_SRC_SIZE
 }
 
 unload_player :: proc(p: ^Player) {
@@ -58,6 +65,7 @@ unload_player :: proc(p: ^Player) {
 	raylib.UnloadTexture(p.jump_tex)
 	raylib.UnloadTexture(p.fall_tex)
 	raylib.UnloadTexture(p.throw_tex)
+	raylib.UnloadTexture(p.teleport_tex)
 }
 
 player_take_damage :: proc(p: ^Player, damage: int) {
@@ -78,6 +86,12 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 	}
 	if p.teleport_invuln_timer > 0 {
 		p.teleport_invuln_timer -= dt
+	}
+
+	if p.is_teleporting {
+		p.vel = {}
+		animate_player_teleport(p, dt)
+		return
 	}
 
 	was_on_ground := p.on_ground
@@ -110,7 +124,7 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 
 	// Facing
 	was_moving := p.moving
-	p.moving = move_x != 0
+	p.moving = p.vel.x != 0
 	if move_x < 0 {
 		p.facing_left = true
 	} else if move_x > 0 {
@@ -163,7 +177,9 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 draw_player :: proc(p: ^Player) {
 	tex: raylib.Texture2D
 
-	if p.is_throwing {
+	if p.is_teleporting {
+		tex = p.teleport_tex
+	} else if p.is_throwing {
 		tex = p.throw_tex
 	} else if !p.on_ground {
 		tex = (p.vel.y < 0) ? p.jump_tex : p.fall_tex
@@ -188,6 +204,14 @@ draw_player :: proc(p: ^Player) {
 	raylib.DrawTexturePro(tex, src, dst, {0, 0}, 0, raylib.WHITE)
 }
 
+start_player_teleport_animation :: proc(p: ^Player) {
+	p.is_teleporting = true
+	p.is_throwing = false
+	p.current_frame = 0
+	p.anim_timer = 0
+	p.teleport_invuln_timer = ANIM_PLAYER_TELEPORT_TIME
+}
+
 @(private = "file")
 animate_player_throw :: proc(p: ^Player, dt: f32) {
 	if p.throw_frames <= 1 {
@@ -202,6 +226,27 @@ animate_player_throw :: proc(p: ^Player, dt: f32) {
 		p.current_frame += 1
 		if int(p.current_frame) >= p.throw_frames {
 			p.current_frame = f32(p.throw_frames - 1)
+		}
+	}
+}
+
+@(private = "file")
+animate_player_teleport :: proc(p: ^Player, dt: f32) {
+	if p.teleport_frames <= 1 {
+		p.current_frame = 0
+		p.is_teleporting = false
+		return
+	}
+
+	frame_time := ANIM_PLAYER_TELEPORT_TIME / f32(p.teleport_frames)
+	p.anim_timer += dt
+	for p.anim_timer >= frame_time && p.is_teleporting {
+		p.anim_timer -= frame_time
+		p.current_frame += 1
+		if int(p.current_frame) >= p.teleport_frames {
+			p.current_frame = 0
+			p.anim_timer = 0
+			p.is_teleporting = false
 		}
 	}
 }
@@ -253,15 +298,14 @@ check_rect_solid :: proc(map_data: ^dm.Dot_Map, rect: raylib.Rectangle) -> bool 
 
 move_and_collide :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 	// Move X
-	p.pos.x += p.vel.x * dt
+	old_x := p.pos.x
+	p.pos.x = old_x + p.vel.x * dt
 	hb := get_hitbox(p)
-	if check_rect_solid(map_data, hb) {
+	if check_rect_solid(map_data, hb) || player_would_leave_supported_ground(p, map_data) {
 		if p.vel.x > 0 {
-			tile_x := int(hb.x + hb.width) / TILE_SIZE
-			p.pos.x = f32(tile_x * TILE_SIZE) - f32(PLAYER_HITBOX_W) / 2
+			p.pos.x = old_x
 		} else if p.vel.x < 0 {
-			tile_x := int(hb.x) / TILE_SIZE
-			p.pos.x = f32((tile_x + 1) * TILE_SIZE) + f32(PLAYER_HITBOX_W) / 2
+			p.pos.x = old_x
 		}
 		p.vel.x = 0
 	}
@@ -282,4 +326,25 @@ move_and_collide :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 		}
 		p.vel.y = 0
 	}
+}
+
+@(private = "file")
+player_would_leave_supported_ground :: proc(p: ^Player, map_data: ^dm.Dot_Map) -> bool {
+	if !p.on_ground {
+		return false
+	}
+	return !rect_has_ground_below(map_data, get_hitbox(p))
+}
+
+rect_has_ground_below :: proc(map_data: ^dm.Dot_Map, rect: raylib.Rectangle) -> bool {
+	foot_y := int(rect.y + rect.height + 1) / TILE_SIZE
+	x0 := int(rect.x) / TILE_SIZE
+	x1 := int(rect.x + rect.width - 0.01) / TILE_SIZE
+
+	for tx in x0 ..= x1 {
+		if is_solid(map_data, tx, foot_y) {
+			return true
+		}
+	}
+	return false
 }

@@ -14,6 +14,9 @@ Game_State :: struct {
 	spear:         Spear,
 	enemies:       [MAX_ENEMIES]Enemy,
 	enemy_count:   int,
+	signs:         [MAX_DECORATIVE_SIGNS]Decorative_Sign,
+	sign_count:    int,
+	waves:         Wave_Encounter,
 	psy_projs:     [MAX_PSYCHIC_PROJECTILES]Psychic_Projectile,
 	psy_proj_count: int,
 	combat:        Combat_State,
@@ -159,6 +162,8 @@ init :: proc() {
 	init_player(&gs.player, spawn_pos)
 	init_spear(&gs.spear)
 	init_enemies(&gs.enemies, &gs.enemy_count, &gs.map_data)
+	init_decorative_signs(&gs.signs, &gs.sign_count, &gs.map_data)
+	init_wave_encounter(&gs.waves, &gs.map_data)
 	init_combat(&gs.combat)
 	init_psychic_projectiles()
 
@@ -204,6 +209,14 @@ update :: proc() {
 
 	update_player(&gs.player, &gs.map_data, dt)
 	update_spear(&gs.spear, &gs.player, dt)
+	update_wave_encounter(
+		&gs.waves,
+		&gs.player,
+		&gs.map_data,
+		&gs.enemies,
+		&gs.enemy_count,
+		gs.camera,
+	)
 	update_enemies(
 		&gs.enemies,
 		gs.enemy_count,
@@ -214,7 +227,17 @@ update :: proc() {
 		dt,
 	)
 	update_psychic_projectiles(&gs.psy_projs, &gs.psy_proj_count, &gs.player, &gs.map_data, dt)
-	update_combat(&gs.combat, &gs.player, &gs.spear, &gs.map_data, &gs.enemies, gs.enemy_count, dt)
+	update_combat(
+		&gs.combat,
+		&gs.player,
+		&gs.spear,
+		&gs.map_data,
+		&gs.enemies,
+		gs.enemy_count,
+		&gs.signs,
+		gs.sign_count,
+		dt,
+	)
 	update_camera(dt)
 
 	// Draw to virtual render target
@@ -223,6 +246,7 @@ update :: proc() {
 
 	raylib.BeginMode2D(gs.camera)
 	draw_map()
+	draw_decorative_signs(&gs.signs, gs.sign_count)
 	draw_enemies(&gs.enemies, gs.enemy_count, gs.hit_flash_shader)
 	draw_psychic_projectiles(&gs.psy_projs, gs.psy_proj_count)
 	player_flashing := gs.player.hit_timer > 0 && int(gs.player.hit_timer / 0.05) % 2 == 0
@@ -234,7 +258,7 @@ update :: proc() {
 		raylib.EndShaderMode()
 	}
 	draw_spear(&gs.spear, &gs.player)
-	draw_combat(&gs.combat, &gs.enemies, gs.enemy_count)
+	draw_combat(&gs.combat, &gs.enemies, gs.enemy_count, &gs.signs, gs.sign_count)
 	raylib.EndMode2D()
 
 	draw_hud(&gs.player)
@@ -265,6 +289,7 @@ shutdown :: proc() {
 	unload_map_data()
 	unload_combat()
 	unload_psychic_projectiles()
+	unload_decorative_signs()
 	unload_enemies()
 	unload_spear(&gs.spear)
 	unload_player(&gs.player)
@@ -359,7 +384,8 @@ draw_map :: proc() {
 			draw_x := f32(cx) * TILE_SIZE
 			draw_y := f32(ry) * TILE_SIZE
 
-			if cell.symbol == '.' || cell.symbol == 's' || cell.symbol == 'c' || cell.symbol == 'g' {
+			if cell.symbol == '.' || cell.symbol == 's' || cell.symbol == 'c' ||
+				cell.symbol == 'g' || cell.symbol == 'm' || cell.symbol == '@' {
 				continue
 			}
 

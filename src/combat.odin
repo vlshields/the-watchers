@@ -10,6 +10,17 @@ Target_Mode :: enum {
 	Manual,
 }
 
+Target_Kind :: enum {
+	None,
+	Enemy,
+	Sign,
+}
+
+Target_Ref :: struct {
+	kind:  Target_Kind,
+	index: int,
+}
+
 Throw_Phase :: enum {
 	None,
 	Windup,
@@ -20,6 +31,7 @@ Throw_Phase :: enum {
 
 Combat_State :: struct {
 	target_mode:    Target_Mode,
+	target_kind:    Target_Kind,
 	target_index:   int,
 	throw_phase:    Throw_Phase,
 	projectile_pos: raylib.Vector2,
@@ -40,6 +52,7 @@ init_combat :: proc(c: ^Combat_State) {
 	projectile_tex = raylib.LoadTexture("assets/sprites/player_spear_throw.png")
 	projectile_frames = int(projectile_tex.width) / SPEAR_SPRITE_SIZE
 	c.target_index = -1
+	c.target_kind = .None
 	c.target_mode = .None
 	c.throw_phase = .None
 }
@@ -55,23 +68,26 @@ update_combat :: proc(
 	map_data: ^dm.Dot_Map,
 	enemies: ^[MAX_ENEMIES]Enemy,
 	enemy_count: int,
+	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
+	sign_count: int,
 	dt: f32,
 ) {
 	// --- Targeting ---
 	if input_target_hold() {
 		if c.target_mode != .Manual {
 			c.target_mode = .Manual
-			if c.target_index < 0 {
-				c.target_index = find_nearest_target(p.pos, enemies, enemy_count)
+			if c.target_kind == .None || c.target_index < 0 {
+				target := find_nearest_target(p.pos, enemies, enemy_count, signs, sign_count)
+				set_combat_target(c, target)
 			}
 		}
 		if input_cycle_target() && c.cycle_cooldown <= 0 && c.throw_phase == .None {
-			cycle_target_in_range(c, p.pos, enemies, enemy_count)
+			cycle_target_in_range(c, p.pos, enemies, enemy_count, signs, sign_count)
 			c.cycle_cooldown = 0.2
 		}
 	} else if c.target_mode == .Manual && c.throw_phase == .None {
 		c.target_mode = .None
-		c.target_index = -1
+		clear_combat_target(c)
 	}
 
 	if c.cycle_cooldown > 0 {
@@ -89,44 +105,51 @@ update_combat :: proc(
 			if strike_target >= 0 {
 				enemy_take_teleport_strike(&enemies[strike_target], knockback_dir)
 			}
+			if c.target_kind == .Sign && c.target_index >= 0 && c.target_index < sign_count {
+				signs[c.target_index].active = false
+			}
 
 			c.throw_phase = .None
 			s.state = .Idle
 			c.spin_frame = 0
 			c.spin_timer = 0
 			p.is_throwing = false
+			if c.target_kind == .Sign {
+				clear_combat_target(c)
+				c.target_mode = .None
+			}
 			if c.target_mode == .Auto {
 				c.target_mode = .None
-				c.target_index = -1
+				clear_combat_target(c)
 			}
 		}
 	}
 
 	// --- Attack ---
 	if input_attack() && s.state == .Idle && c.throw_phase == .None {
-		target := -1
-		if c.target_mode == .Manual && c.target_index >= 0 && c.target_index < enemy_count {
-			e := &enemies[c.target_index]
-			if e.state != .Inactive && e.state != .Dead {
-				target = c.target_index
+		target := Target_Ref{kind = .None, index = -1}
+		if c.target_mode == .Manual {
+			manual_target := Target_Ref{kind = c.target_kind, index = c.target_index}
+			if combat_target_valid(manual_target, enemies, enemy_count, signs, sign_count) {
+				target = manual_target
 			}
 		}
-		if target < 0 {
-			target = find_nearest_target(p.pos, enemies, enemy_count)
-			if target >= 0 {
+		if target.kind == .None {
+			target = find_nearest_target(p.pos, enemies, enemy_count, signs, sign_count)
+			if target.kind != .None {
 				c.target_mode = .Auto
 			}
 		}
-		if target >= 0 {
-			c.target_index = target
+		if target.kind != .None {
+			set_combat_target(c, target)
 			c.throw_phase = .Windup
 			c.throw_timer = ANIM_PLAYER_THROWS_SPEAR_TIME
 			p.is_throwing = true
 			p.current_frame = 0
 			p.anim_timer = 0
 			s.state = .Throwing
-			enemy_center := get_enemy_center(&enemies[target])
-			p.facing_left = enemy_center.x < p.pos.x
+			target_center := get_combat_target_center(target, enemies, signs)
+			p.facing_left = target_center.x < p.pos.x
 		}
 	}
 
@@ -137,9 +160,10 @@ update_combat :: proc(
 		if c.throw_timer <= 0 {
 			p.is_throwing = false
 			c.projectile_pos = {p.pos.x, p.pos.y - f32(PLAYER_HITBOX_H) / 2}
-			enemy_center := get_enemy_center(&enemies[c.target_index])
-			dx := enemy_center.x - c.projectile_pos.x
-			dy := enemy_center.y - c.projectile_pos.y
+			target := Target_Ref{kind = c.target_kind, index = c.target_index}
+			target_center := get_combat_target_center(target, enemies, signs)
+			dx := target_center.x - c.projectile_pos.x
+			dy := target_center.y - c.projectile_pos.y
 			length := math.sqrt(dx * dx + dy * dy)
 			if length > 0 {
 				c.projectile_dir = {dx / length, dy / length}
@@ -149,25 +173,21 @@ update_combat :: proc(
 			c.spin_timer = 0
 		}
 	case .Flying:
+		prev_pos := c.projectile_pos
 		c.projectile_pos.x += c.projectile_dir.x * SPEAR_PROJECTILE_SPEED * dt
 		c.projectile_pos.y += c.projectile_dir.y * SPEAR_PROJECTILE_SPEED * dt
 		advance_spin(c, dt)
 
 		hit := false
-		if c.target_index >= 0 && c.target_index < enemy_count {
-			e := &enemies[c.target_index]
-			if e.state != .Inactive && e.state != .Dead {
-				center := get_enemy_center(e)
-				dx := center.x - c.projectile_pos.x
-				dy := center.y - c.projectile_pos.y
-				if dx * dx + dy * dy <= SPEAR_HIT_RADIUS * SPEAR_HIT_RADIUS {
+		target := Target_Ref{kind = c.target_kind, index = c.target_index}
+		if combat_target_valid(target, enemies, enemy_count, signs, sign_count) {
+			if spear_segment_hits_target(prev_pos, c.projectile_pos, target, enemies, signs) {
+				if target.kind == .Enemy {
+					e := &enemies[target.index]
 					enemy_take_damage(e, SPEAR_THROW_DAMAGE)
-					c.throw_phase = .Hit
-					c.throw_timer = SPEAR_HIT_PAUSE_TIME
-					hit = true
 				}
-			} else {
-				begin_spear_return(c)
+				c.throw_phase = .Hit
+				c.throw_timer = SPEAR_HIT_PAUSE_TIME
 				hit = true
 			}
 		} else {
@@ -201,7 +221,7 @@ update_combat :: proc(
 			c.spin_timer = 0
 			if c.target_mode == .Auto {
 				c.target_mode = .None
-				c.target_index = -1
+				clear_combat_target(c)
 			}
 		} else {
 			length := math.sqrt(dist_sq)
@@ -214,20 +234,24 @@ update_combat :: proc(
 	}
 }
 
-draw_combat :: proc(c: ^Combat_State, enemies: ^[MAX_ENEMIES]Enemy, enemy_count: int) {
+draw_combat :: proc(
+	c: ^Combat_State,
+	enemies: ^[MAX_ENEMIES]Enemy,
+	enemy_count: int,
+	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
+	sign_count: int,
+) {
 	// Targeting reticle
-	if c.target_mode != .None && c.target_index >= 0 && c.target_index < enemy_count {
-		e := &enemies[c.target_index]
-		if e.state != .Inactive && e.state != .Dead {
-			center := get_enemy_center(e)
-			pulse := 1.0 + 0.15 * math.sin(f32(raylib.GetTime()) * 6.0)
-			size := 10.0 * pulse
-			color := raylib.Color{0xff, 0xcc, 0x00, 0xcc}
-			raylib.DrawLineV({center.x, center.y - size}, {center.x + size, center.y}, color)
-			raylib.DrawLineV({center.x + size, center.y}, {center.x, center.y + size}, color)
-			raylib.DrawLineV({center.x, center.y + size}, {center.x - size, center.y}, color)
-			raylib.DrawLineV({center.x - size, center.y}, {center.x, center.y - size}, color)
-		}
+	target := Target_Ref{kind = c.target_kind, index = c.target_index}
+	if c.target_mode != .None && combat_target_valid(target, enemies, enemy_count, signs, sign_count) {
+		center := get_combat_target_center(target, enemies, signs)
+		pulse := 1.0 + 0.15 * math.sin(f32(raylib.GetTime()) * 6.0)
+		size := 10.0 * pulse
+		color := raylib.Color{0xff, 0xcc, 0x00, 0xcc}
+		raylib.DrawLineV({center.x, center.y - size}, {center.x + size, center.y}, color)
+		raylib.DrawLineV({center.x + size, center.y}, {center.x, center.y + size}, color)
+		raylib.DrawLineV({center.x, center.y + size}, {center.x - size, center.y}, color)
+		raylib.DrawLineV({center.x - size, center.y}, {center.x, center.y - size}, color)
 	}
 
 	// Projectile
@@ -260,12 +284,18 @@ draw_combat :: proc(c: ^Combat_State, enemies: ^[MAX_ENEMIES]Enemy, enemy_count:
 // ---------------------------------------------------------------------------
 
 @(private = "file")
-find_nearest_target :: proc(player_pos: raylib.Vector2, enemies: ^[MAX_ENEMIES]Enemy, count: int) -> int {
-	best_idx := -1
+find_nearest_target :: proc(
+	player_pos: raylib.Vector2,
+	enemies: ^[MAX_ENEMIES]Enemy,
+	enemy_count: int,
+	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
+	sign_count: int,
+) -> Target_Ref {
+	best := Target_Ref{kind = .None, index = -1}
 	best_dist_sq: f32 = COMBAT_RANGE * COMBAT_RANGE + 1
 	range_sq: f32 = COMBAT_RANGE * COMBAT_RANGE
 
-	for i in 0 ..< count {
+	for i in 0 ..< enemy_count {
 		e := &enemies[i]
 		if e.state == .Inactive || e.state == .Dead {
 			continue
@@ -276,10 +306,26 @@ find_nearest_target :: proc(player_pos: raylib.Vector2, enemies: ^[MAX_ENEMIES]E
 		dist_sq := dx * dx + dy * dy
 		if dist_sq <= range_sq && dist_sq < best_dist_sq {
 			best_dist_sq = dist_sq
-			best_idx = i
+			best = {kind = .Enemy, index = i}
 		}
 	}
-	return best_idx
+
+	for i in 0 ..< sign_count {
+		sign := &signs[i]
+		if !sign.active {
+			continue
+		}
+		center := get_decorative_sign_center(sign)
+		dx := center.x - player_pos.x
+		dy := center.y - player_pos.y
+		dist_sq := dx * dx + dy * dy
+		if dist_sq <= range_sq && dist_sq < best_dist_sq {
+			best_dist_sq = dist_sq
+			best = {kind = .Sign, index = i}
+		}
+	}
+
+	return best
 }
 
 @(private = "file")
@@ -287,13 +333,15 @@ cycle_target_in_range :: proc(
 	c: ^Combat_State,
 	player_pos: raylib.Vector2,
 	enemies: ^[MAX_ENEMIES]Enemy,
-	count: int,
+	enemy_count: int,
+	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
+	sign_count: int,
 ) {
-	valid: [MAX_ENEMIES]int
+	valid: [MAX_COMBAT_TARGETS]Target_Ref
 	valid_count := 0
 	range_sq: f32 = COMBAT_RANGE * COMBAT_RANGE
 
-	for i in 0 ..< count {
+	for i in 0 ..< enemy_count {
 		e := &enemies[i]
 		if e.state == .Inactive || e.state == .Dead {
 			continue
@@ -302,25 +350,94 @@ cycle_target_in_range :: proc(
 		dx := center.x - player_pos.x
 		dy := center.y - player_pos.y
 		if dx * dx + dy * dy <= range_sq {
-			valid[valid_count] = i
+			valid[valid_count] = {kind = .Enemy, index = i}
+			valid_count += 1
+		}
+	}
+
+	for i in 0 ..< sign_count {
+		sign := &signs[i]
+		if !sign.active {
+			continue
+		}
+		center := get_decorative_sign_center(sign)
+		dx := center.x - player_pos.x
+		dy := center.y - player_pos.y
+		if dx * dx + dy * dy <= range_sq {
+			valid[valid_count] = {kind = .Sign, index = i}
 			valid_count += 1
 		}
 	}
 
 	if valid_count == 0 {
-		c.target_index = -1
+		clear_combat_target(c)
 		return
 	}
 
 	current_pos := -1
 	for i in 0 ..< valid_count {
-		if valid[i] == c.target_index {
+		if valid[i].kind == c.target_kind && valid[i].index == c.target_index {
 			current_pos = i
 			break
 		}
 	}
 
-	c.target_index = valid[(current_pos + 1) % valid_count]
+	set_combat_target(c, valid[(current_pos + 1) % valid_count])
+}
+
+@(private = "file")
+set_combat_target :: proc(c: ^Combat_State, target: Target_Ref) {
+	c.target_kind = target.kind
+	c.target_index = target.index
+}
+
+@(private = "file")
+clear_combat_target :: proc(c: ^Combat_State) {
+	c.target_kind = .None
+	c.target_index = -1
+}
+
+@(private = "file")
+combat_target_valid :: proc(
+	target: Target_Ref,
+	enemies: ^[MAX_ENEMIES]Enemy,
+	enemy_count: int,
+	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
+	sign_count: int,
+) -> bool {
+	switch target.kind {
+	case .Enemy:
+		if target.index < 0 || target.index >= enemy_count {
+			return false
+		}
+		e := &enemies[target.index]
+		return e.state != .Inactive && e.state != .Dead
+	case .Sign:
+		if target.index < 0 || target.index >= sign_count {
+			return false
+		}
+		return signs[target.index].active
+	case .None:
+		return false
+	}
+	return false
+}
+
+@(private = "file")
+get_combat_target_center :: proc(
+	target: Target_Ref,
+	enemies: ^[MAX_ENEMIES]Enemy,
+	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
+) -> raylib.Vector2 {
+	switch target.kind {
+	case .Enemy:
+		return get_enemy_center(&enemies[target.index])
+	case .Sign:
+		return get_decorative_sign_center(&signs[target.index])
+	case .None:
+		return {}
+	}
+	return {}
 }
 
 @(private = "file")
@@ -341,7 +458,8 @@ teleport_strike_target :: proc(
 	enemies: ^[MAX_ENEMIES]Enemy,
 	enemy_count: int,
 ) -> int {
-	if c.throw_phase != .Hit || c.target_index < 0 || c.target_index >= enemy_count {
+	if c.throw_phase != .Hit || c.target_kind != .Enemy ||
+		c.target_index < 0 || c.target_index >= enemy_count {
 		return -1
 	}
 
@@ -395,6 +513,33 @@ damage_enemies_on_spear_return :: proc(
 			c.return_damaged[i] = true
 		}
 	}
+}
+
+@(private = "file")
+spear_segment_hits_target :: proc(
+	from, to: raylib.Vector2,
+	target: Target_Ref,
+	enemies: ^[MAX_ENEMIES]Enemy,
+	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
+) -> bool {
+	switch target.kind {
+	case .Enemy:
+		return spear_segment_hits_enemy(from, to, &enemies[target.index])
+	case .Sign:
+		center := get_decorative_sign_center(&signs[target.index])
+		rect := raylib.Rectangle {
+			center.x - f32(SPRITE_DST_SIZE) / 2 - SPEAR_HIT_RADIUS,
+			center.y - f32(SPRITE_DST_SIZE) / 2 - SPEAR_HIT_RADIUS,
+			f32(SPRITE_DST_SIZE) + SPEAR_HIT_RADIUS * 2,
+			f32(SPRITE_DST_SIZE) + SPEAR_HIT_RADIUS * 2,
+		}
+		return point_in_rect(from, rect) ||
+			point_in_rect(to, rect) ||
+			segment_intersects_rect(from, to, rect)
+	case .None:
+		return false
+	}
+	return false
 }
 
 @(private = "file")
@@ -476,7 +621,7 @@ teleport_player_to_spear :: proc(p: ^Player, map_data: ^dm.Dot_Map, spear_pos: r
 	p.vel = {}
 	p.on_ground = player_on_ground_at(map_data, dest)
 	p.jumps_left = p.on_ground ? MAX_JUMPS : 1
-	p.teleport_invuln_timer = PLAYER_TELEPORT_INVULN_DURATION
+	start_player_teleport_animation(p)
 	return true
 }
 

@@ -37,6 +37,7 @@ Enemy :: struct {
 	attack_cooldown:  f32,
 	attack_fired:     bool,
 	aggroed:          bool,
+	wave_spawned:     bool,
 	attack_fx_frame:  f32,
 	attack_fx_timer:  f32,
 	attack_fx_active: bool,
@@ -215,6 +216,7 @@ init_enemy_at :: proc(e: ^Enemy, enemy_type: Enemy_Type, pos: raylib.Vector2) {
 	e.attack_cooldown = 0
 	e.attack_fired = false
 	e.aggroed = false
+	e.wave_spawned = false
 	e.attack_fx_frame = 0
 	e.attack_fx_timer = 0
 	e.attack_fx_active = false
@@ -237,15 +239,15 @@ update_enemies :: proc(
 
 draw_enemies :: proc(enemies: ^[MAX_ENEMIES]Enemy, count: int, hit_flash_shader: raylib.Shader) {
 	for i in 0 ..< count {
-		ghoul_flashing := enemies[i].type == .Ghoul &&
+		shader_flashing := (enemies[i].type == .Ghoul || enemies[i].type == .Mutant_Cherub) &&
 			enemies[i].state == .Hit &&
 			enemies[i].hit_timer > 0 &&
 			int(enemies[i].hit_timer / 0.05) % 2 == 0
-		if ghoul_flashing {
+		if shader_flashing {
 			raylib.BeginShaderMode(hit_flash_shader)
 		}
 		draw_enemy(&enemies[i])
-		if ghoul_flashing {
+		if shader_flashing {
 			raylib.EndShaderMode()
 		}
 	}
@@ -451,7 +453,17 @@ update_enemy :: proc(
 		enemy_apply_gravity(e, map_data, dt)
 	case .Chase:
 		if e.type == .Cherub {
-			e.state = .Patrol
+			center := get_enemy_center(e)
+			dx := player.pos.x - center.x
+			dy := player.pos.y - center.y
+			dist_sq := dx * dx + dy * dy
+			e.facing_left = dx < 0
+			if dist_sq <= ENEMY_CHERUB_ATTACK_RANGE * ENEMY_CHERUB_ATTACK_RANGE {
+				e.state = .Attack
+				e.current_frame = 0
+				e.anim_timer = 0
+				e.attack_fired = false
+			}
 			enemy_apply_gravity(e, map_data, dt)
 			return
 		}
@@ -491,7 +503,7 @@ update_enemy :: proc(
 			e.pos.x += speed * dt
 
 			hb := get_enemy_hitbox(e)
-			if check_rect_solid(map_data, hb) {
+			if check_rect_solid(map_data, hb) || enemy_would_leave_supported_ground(e, map_data) {
 				if speed > 0 {
 					tile_x := int(hb.x + hb.width) / TILE_SIZE
 					e.pos.x = f32(tile_x * TILE_SIZE) - half_hw
@@ -579,7 +591,7 @@ update_enemy :: proc(
 			e.pos.x += speed * dt
 
 			hb := get_enemy_hitbox(e)
-			if check_rect_solid(map_data, hb) {
+			if check_rect_solid(map_data, hb) || enemy_would_leave_supported_ground(e, map_data) {
 				if speed > 0 {
 					tile_x := int(hb.x + hb.width) / TILE_SIZE
 					e.pos.x = f32(tile_x * TILE_SIZE) - half_hw
@@ -623,7 +635,7 @@ enemy_apply_knockback :: proc(e: ^Enemy, map_data: ^dm.Dot_Map, dt: f32) {
 
 	e.pos.x += e.vel_x * dt
 	hb := get_enemy_hitbox(e)
-	if check_rect_solid(map_data, hb) {
+	if check_rect_solid(map_data, hb) || enemy_would_leave_supported_ground(e, map_data) {
 		if e.vel_x > 0 {
 			tile_x := int(hb.x + hb.width) / TILE_SIZE
 			e.pos.x = f32(tile_x * TILE_SIZE) - hb.width / 2
@@ -646,6 +658,14 @@ enemy_apply_knockback :: proc(e: ^Enemy, map_data: ^dm.Dot_Map, dt: f32) {
 			e.vel_x = 0
 		}
 	}
+}
+
+@(private = "file")
+enemy_would_leave_supported_ground :: proc(e: ^Enemy, map_data: ^dm.Dot_Map) -> bool {
+	if !e.on_ground {
+		return false
+	}
+	return !rect_has_ground_below(map_data, get_enemy_hitbox(e))
 }
 
 @(private = "file")

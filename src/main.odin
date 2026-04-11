@@ -160,6 +160,7 @@ init :: proc() {
 	init_spear(&gs.spear)
 	init_enemies(&gs.enemies, &gs.enemy_count, &gs.map_data)
 	init_combat(&gs.combat)
+	init_psychic_projectiles()
 
 	gs.camera = raylib.Camera2D{
 		zoom   = CAMERA_ZOOM,
@@ -263,6 +264,7 @@ shutdown :: proc() {
 	raylib.UnloadRenderTexture(gs.render_target)
 	unload_map_data()
 	unload_combat()
+	unload_psychic_projectiles()
 	unload_enemies()
 	unload_spear(&gs.spear)
 	unload_player(&gs.player)

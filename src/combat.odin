@@ -28,6 +28,7 @@ Combat_State :: struct {
 	spin_frame:     f32,
 	spin_timer:     f32,
 	cycle_cooldown: f32,
+	return_damaged: [MAX_ENEMIES]bool,
 }
 
 @(private = "file")
@@ -78,7 +79,17 @@ update_combat :: proc(
 	}
 
 	if input_spear_teleport() && spear_can_teleport(c) {
+		strike_target := teleport_strike_target(c, enemies, enemy_count)
+		knockback_dir: f32 = 0
+		if strike_target >= 0 {
+			knockback_dir = teleport_strike_knockback_dir(p, &enemies[strike_target], c)
+		}
+
 		if teleport_player_to_spear(p, map_data, c.projectile_pos) {
+			if strike_target >= 0 {
+				enemy_take_teleport_strike(&enemies[strike_target], knockback_dir)
+			}
+
 			c.throw_phase = .None
 			s.state = .Idle
 			c.spin_frame = 0
@@ -109,8 +120,10 @@ update_combat :: proc(
 		if target >= 0 {
 			c.target_index = target
 			c.throw_phase = .Windup
-			c.throw_timer = PLAYER_THROW_HOLD_TIME
+			c.throw_timer = ANIM_PLAYER_THROWS_SPEAR_TIME
 			p.is_throwing = true
+			p.current_frame = 0
+			p.anim_timer = 0
 			s.state = .Throwing
 			enemy_center := get_enemy_center(&enemies[target])
 			p.facing_left = enemy_center.x < p.pos.x
@@ -150,15 +163,15 @@ update_combat :: proc(
 				if dx * dx + dy * dy <= SPEAR_HIT_RADIUS * SPEAR_HIT_RADIUS {
 					enemy_take_damage(e, SPEAR_THROW_DAMAGE)
 					c.throw_phase = .Hit
-					c.throw_timer = 0.05
+					c.throw_timer = SPEAR_HIT_PAUSE_TIME
 					hit = true
 				}
 			} else {
-				c.throw_phase = .Returning
+				begin_spear_return(c)
 				hit = true
 			}
 		} else {
-			c.throw_phase = .Returning
+			begin_spear_return(c)
 			hit = true
 		}
 
@@ -167,13 +180,13 @@ update_combat :: proc(
 			pdy := c.projectile_pos.y - p.pos.y
 			max_dist: f32 = COMBAT_RANGE * 1.5
 			if pdx * pdx + pdy * pdy > max_dist * max_dist {
-				c.throw_phase = .Returning
+				begin_spear_return(c)
 			}
 		}
 	case .Hit:
 		c.throw_timer -= dt
 		if c.throw_timer <= 0 {
-			c.throw_phase = .Returning
+			begin_spear_return(c)
 		}
 	case .Returning:
 		player_center := raylib.Vector2{p.pos.x, p.pos.y - f32(PLAYER_HITBOX_H) / 2}
@@ -192,8 +205,10 @@ update_combat :: proc(
 			}
 		} else {
 			length := math.sqrt(dist_sq)
+			prev_pos := c.projectile_pos
 			c.projectile_pos.x += (dx / length) * SPEAR_RETURN_SPEED * dt
 			c.projectile_pos.y += (dy / length) * SPEAR_RETURN_SPEED * dt
+			damage_enemies_on_spear_return(c, enemies, enemy_count, prev_pos, c.projectile_pos)
 			advance_spin(c, dt)
 		}
 	}
@@ -318,6 +333,129 @@ advance_spin :: proc(c: ^Combat_State, dt: f32) {
 			c.spin_frame = 0
 		}
 	}
+}
+
+@(private = "file")
+teleport_strike_target :: proc(
+	c: ^Combat_State,
+	enemies: ^[MAX_ENEMIES]Enemy,
+	enemy_count: int,
+) -> int {
+	if c.throw_phase != .Hit || c.target_index < 0 || c.target_index >= enemy_count {
+		return -1
+	}
+
+	e := &enemies[c.target_index]
+	if e.state == .Inactive || e.state == .Dead {
+		return -1
+	}
+	return c.target_index
+}
+
+@(private = "file")
+teleport_strike_knockback_dir :: proc(p: ^Player, e: ^Enemy, c: ^Combat_State) -> f32 {
+	center := get_enemy_center(e)
+	dir := center.x - p.pos.x
+	if abs(dir) < 0.01 {
+		dir = c.projectile_dir.x
+	}
+	if dir < 0 {
+		return -1
+	}
+	return 1
+}
+
+@(private = "file")
+begin_spear_return :: proc(c: ^Combat_State) {
+	c.throw_phase = .Returning
+	for &damaged in c.return_damaged {
+		damaged = false
+	}
+}
+
+@(private = "file")
+damage_enemies_on_spear_return :: proc(
+	c: ^Combat_State,
+	enemies: ^[MAX_ENEMIES]Enemy,
+	enemy_count: int,
+	from, to: raylib.Vector2,
+) {
+	for i in 0 ..< enemy_count {
+		if c.return_damaged[i] {
+			continue
+		}
+
+		e := &enemies[i]
+		if e.state == .Inactive || e.state == .Dead {
+			continue
+		}
+
+		if spear_segment_hits_enemy(from, to, e) {
+			enemy_take_damage(e, SPEAR_THROW_DAMAGE)
+			c.return_damaged[i] = true
+		}
+	}
+}
+
+@(private = "file")
+spear_segment_hits_enemy :: proc(from, to: raylib.Vector2, enemy: ^Enemy) -> bool {
+	hb := get_enemy_hitbox(enemy)
+	expanded := raylib.Rectangle {
+		hb.x - SPEAR_HIT_RADIUS,
+		hb.y - SPEAR_HIT_RADIUS,
+		hb.width + SPEAR_HIT_RADIUS * 2,
+		hb.height + SPEAR_HIT_RADIUS * 2,
+	}
+
+	return point_in_rect(from, expanded) ||
+		point_in_rect(to, expanded) ||
+		segment_intersects_rect(from, to, expanded)
+}
+
+@(private = "file")
+point_in_rect :: proc(p: raylib.Vector2, rect: raylib.Rectangle) -> bool {
+	return p.x >= rect.x && p.x <= rect.x + rect.width &&
+		p.y >= rect.y && p.y <= rect.y + rect.height
+}
+
+@(private = "file")
+segment_intersects_rect :: proc(a, b: raylib.Vector2, rect: raylib.Rectangle) -> bool {
+	t_min: f32 = 0
+	t_max: f32 = 1
+	dx := b.x - a.x
+	dy := b.y - a.y
+
+	if !clip_segment_axis(a.x, dx, rect.x, rect.x + rect.width, &t_min, &t_max) {
+		return false
+	}
+	if !clip_segment_axis(a.y, dy, rect.y, rect.y + rect.height, &t_min, &t_max) {
+		return false
+	}
+	return true
+}
+
+@(private = "file")
+clip_segment_axis :: proc(
+	start, delta, min_bound, max_bound: f32,
+	t_min, t_max: ^f32,
+) -> bool {
+	if delta == 0 {
+		return start >= min_bound && start <= max_bound
+	}
+
+	inv_delta := 1 / delta
+	t1 := (min_bound - start) * inv_delta
+	t2 := (max_bound - start) * inv_delta
+	if t1 > t2 {
+		t1, t2 = t2, t1
+	}
+	if t1 > t_min^ {
+		t_min^ = t1
+	}
+	if t2 < t_max^ {
+		t_max^ = t2
+	}
+	return t_min^ <= t_max^
 }
 
 @(private = "file")

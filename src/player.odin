@@ -21,6 +21,7 @@ Player :: struct {
 	idle_frames:       int,
 	jump_frames:       int,
 	fall_frames:       int,
+	throw_frames:      int,
 	current_frame:     f32,
 	anim_timer:        f32,
 	hit_timer:         f32,
@@ -48,6 +49,7 @@ init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
 	p.idle_frames = int(p.idle_tex.width) / SPRITE_SRC_SIZE
 	p.jump_frames = int(p.jump_tex.width) / SPRITE_SRC_SIZE
 	p.fall_frames = int(p.fall_tex.width) / SPRITE_SRC_SIZE
+	p.throw_frames = int(p.throw_tex.width) / SPRITE_SRC_SIZE
 }
 
 unload_player :: proc(p: ^Player) {
@@ -115,6 +117,11 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 		p.facing_left = false
 	}
 
+	if p.is_throwing {
+		animate_player_throw(p, dt)
+		return
+	}
+
 	// Animation state transitions
 	rising := p.vel.y < 0
 	anim_changed := (p.moving != was_moving) ||
@@ -179,6 +186,24 @@ draw_player :: proc(p: ^Player) {
 		SPRITE_DST_SIZE,
 	}
 	raylib.DrawTexturePro(tex, src, dst, {0, 0}, 0, raylib.WHITE)
+}
+
+@(private = "file")
+animate_player_throw :: proc(p: ^Player, dt: f32) {
+	if p.throw_frames <= 1 {
+		p.current_frame = 0
+		return
+	}
+
+	frame_time := ANIM_PLAYER_THROWS_SPEAR_TIME / f32(p.throw_frames)
+	p.anim_timer += dt
+	if p.anim_timer >= frame_time {
+		p.anim_timer -= frame_time
+		p.current_frame += 1
+		if int(p.current_frame) >= p.throw_frames {
+			p.current_frame = f32(p.throw_frames - 1)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------

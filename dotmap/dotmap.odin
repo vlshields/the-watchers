@@ -227,16 +227,31 @@ extract_kv :: proc(s: string, key: string) -> string {
 	if len(s) == 0 {
 		return ""
 	}
-	parts := strings.split(s, ",")
-	defer delete(parts)
-	for part in parts {
-		trimmed := strings.trim_space(part)
-		eq := strings.index(trimmed, "=")
+
+	start := 0
+	bracket_depth := 0
+	for i in 0 ..= len(s) {
+		at_end := i == len(s)
+		if !at_end {
+			if s[i] == '[' {
+				bracket_depth += 1
+			} else if s[i] == ']' && bracket_depth > 0 {
+				bracket_depth -= 1
+			}
+		}
+
+		if !at_end && (s[i] != ',' || bracket_depth > 0) {
+			continue
+		}
+
+		part := strings.trim_space(s[start:i])
+		start = i + 1
+		eq := strings.index(part, "=")
 		if eq < 0 {
 			continue
 		}
-		if trimmed[:eq] == key {
-			return strings.clone(trimmed[eq + 1:])
+		if strings.trim_space(part[:eq]) == key {
+			return strings.clone(strings.trim_space(part[eq + 1:]))
 		}
 	}
 	return ""

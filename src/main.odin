@@ -1,5 +1,6 @@
 package game
 
+import "core:math"
 import "vendor:raylib"
 import dm "../dotmap"
 import "core:fmt"
@@ -342,6 +343,8 @@ update_camera :: proc(dt: f32) {
 	eased := raylib.EaseCubicOut(t, 0, 1, 1)
 	gs.camera.target.x += (desired.x - gs.camera.target.x) * eased
 	gs.camera.target.y += (desired.y - gs.camera.target.y) * eased
+	gs.camera.target.x = math.round(gs.camera.target.x)
+	gs.camera.target.y = math.round(gs.camera.target.y)
 }
 
 // ---------------------------------------------------------------------------

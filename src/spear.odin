@@ -1,5 +1,6 @@
 package game
 
+import "core:math"
 import "vendor:raylib"
 
 Spear_State :: enum {
@@ -132,8 +133,8 @@ draw_spear :: proc(s: ^Spear, p: ^Player) {
 
 	offset := f32(SPEAR_SPRITE_SIZE - SPRITE_DST_SIZE) / 2
 	dst := raylib.Rectangle{
-		p.pos.x - SPRITE_DST_SIZE / 2 - offset,
-		p.pos.y - SPRITE_DST_SIZE - offset - 4,
+		math.round(p.pos.x) - SPRITE_DST_SIZE / 2 - offset,
+		math.round(p.pos.y) - SPRITE_DST_SIZE - offset - 4,
 		f32(SPEAR_SPRITE_SIZE),
 		f32(SPEAR_SPRITE_SIZE),
 	}

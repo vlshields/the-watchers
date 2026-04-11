@@ -1,6 +1,5 @@
 package game
 
-import "core:math"
 import "vendor:raylib"
 import dm "../dotmap"
 import "core:fmt"
@@ -246,7 +245,7 @@ update :: proc() {
 	raylib.ClearBackground(gs.bg_color)
 
 	raylib.BeginMode2D(gs.camera)
-	draw_map()
+	draw_map(gs.camera)
 	draw_decorative_signs(&gs.signs, gs.sign_count)
 	draw_enemies(&gs.enemies, gs.enemy_count, gs.hit_flash_shader)
 	draw_psychic_projectiles(&gs.psy_projs, gs.psy_proj_count)
@@ -343,8 +342,6 @@ update_camera :: proc(dt: f32) {
 	eased := raylib.EaseCubicOut(t, 0, 1, 1)
 	gs.camera.target.x += (desired.x - gs.camera.target.x) * eased
 	gs.camera.target.y += (desired.y - gs.camera.target.y) * eased
-	gs.camera.target.x = math.round(gs.camera.target.x)
-	gs.camera.target.y = math.round(gs.camera.target.y)
 }
 
 // ---------------------------------------------------------------------------
@@ -352,8 +349,7 @@ update_camera :: proc(dt: f32) {
 // ---------------------------------------------------------------------------
 
 @(private = "file")
-draw_map :: proc() {
-	cam := gs.camera
+draw_map :: proc(cam: raylib.Camera2D) {
 	half_w := f32(SCREEN_WIDTH) / (2 * cam.zoom)
 	half_h := f32(SCREEN_HEIGHT) / (2 * cam.zoom)
 	min_x := int((cam.target.x - half_w) / TILE_SIZE) - 1

@@ -803,6 +803,7 @@ draw_enemy :: proc(e: ^Enemy) {
 	}
 
 	raylib.DrawTexturePro(tex, src, dst, {0, 0}, 0, tint)
+	draw_enemy_hp_bar(e, draw_size)
 
 	// Draw ghoul attack FX
 	if e.type == .Ghoul && e.state == .Attack && e.attack_fx_active {
@@ -832,4 +833,44 @@ draw_enemy :: proc(e: ^Enemy) {
 		beam_dst := get_mutant_cherub_beam_rect(e)
 		raylib.DrawTexturePro(mutant_cherub_beam_tex, beam_src, beam_dst, {0, 0}, 0, raylib.WHITE)
 	}
+}
+
+@(private = "file")
+draw_enemy_hp_bar :: proc(e: ^Enemy, draw_size: f32) {
+	if e.state == .Inactive || e.state == .Dead {
+		return
+	}
+
+	max_hp := enemy_max_hp(e.type)
+	if e.hp >= max_hp {
+		return
+	}
+
+	ratio := f32(e.hp) / f32(max_hp)
+	if ratio < 0 {
+		ratio = 0
+	}
+
+	bar_w := f32(ENEMY_HP_BAR_W)
+	x := e.pos.x - bar_w / 2
+	y := e.pos.y - draw_size - f32(ENEMY_HP_BAR_Y_OFFSET)
+	fill_w := bar_w * ratio
+
+	raylib.DrawRectangle(i32(x), i32(y), ENEMY_HP_BAR_W, ENEMY_HP_BAR_H, raylib.Color{0x20, 0x08, 0x10, 0xff})
+	if fill_w > 0 {
+		raylib.DrawRectangle(i32(x), i32(y), i32(fill_w), ENEMY_HP_BAR_H, raylib.Color{0xf0, 0x21, 0x58, 0xff})
+	}
+}
+
+@(private = "file")
+enemy_max_hp :: proc(enemy_type: Enemy_Type) -> int {
+	switch enemy_type {
+	case .Cherub:
+		return ENEMY_CHERUB_HP
+	case .Ghoul:
+		return ENEMY_GHOUL_HP
+	case .Mutant_Cherub:
+		return ENEMY_MUTANT_CHERUB_HP
+	}
+	return 1
 }

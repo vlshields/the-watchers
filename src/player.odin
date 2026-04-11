@@ -1,6 +1,5 @@
 package game
 
-import "core:math"
 import "vendor:raylib"
 import dm "../dotmap"
 
@@ -197,8 +196,8 @@ draw_player :: proc(p: ^Player) {
 		f32(SPRITE_SRC_SIZE),
 	}
 	dst := raylib.Rectangle{
-		math.round(p.pos.x) - SPRITE_DST_SIZE / 2,
-		math.round(p.pos.y) - SPRITE_DST_SIZE,
+		p.pos.x - SPRITE_DST_SIZE / 2,
+		p.pos.y - SPRITE_DST_SIZE,
 		SPRITE_DST_SIZE,
 		SPRITE_DST_SIZE,
 	}

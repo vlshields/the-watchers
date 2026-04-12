@@ -176,20 +176,34 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 
 draw_player :: proc(p: ^Player) {
 	tex: raylib.Texture2D
+	frames: int
 
 	if p.is_teleporting {
 		tex = p.teleport_tex
+		frames = p.teleport_frames
 	} else if p.is_throwing {
 		tex = p.throw_tex
+		frames = p.throw_frames
 	} else if !p.on_ground {
-		tex = (p.vel.y < 0) ? p.jump_tex : p.fall_tex
+		if p.vel.y < 0 {
+			tex = p.jump_tex
+			frames = p.jump_frames
+		} else {
+			tex = p.fall_tex
+			frames = p.fall_frames
+		}
 	} else if p.moving {
 		tex = p.move_tex
+		frames = p.frame_count
 	} else {
 		tex = p.idle_tex
+		frames = p.idle_frames
 	}
 
 	frame := int(p.current_frame)
+	if frame >= frames {
+		frame = frames - 1
+	}
 	src := raylib.Rectangle{
 		f32(frame * SPRITE_SRC_SIZE), 0,
 		p.facing_left ? -f32(SPRITE_SRC_SIZE) : f32(SPRITE_SRC_SIZE),

@@ -77,7 +77,7 @@ update_combat :: proc(
 		if c.target_mode != .Manual {
 			c.target_mode = .Manual
 			if c.target_kind == .None || c.target_index < 0 {
-				target := find_nearest_target(p.pos, enemies, enemy_count, signs, sign_count)
+				target := find_nearest_target(p, map_data, enemies, enemy_count, signs, sign_count)
 				set_combat_target(c, target)
 			}
 		}
@@ -135,7 +135,7 @@ update_combat :: proc(
 			}
 		}
 		if target.kind == .None {
-			target = find_nearest_target(p.pos, enemies, enemy_count, signs, sign_count)
+			target = find_nearest_target(p, map_data, enemies, enemy_count, signs, sign_count)
 			if target.kind != .None {
 				c.target_mode = .Auto
 			}
@@ -285,7 +285,8 @@ draw_combat :: proc(
 
 @(private = "file")
 find_nearest_target :: proc(
-	player_pos: raylib.Vector2,
+	p: ^Player,
+	map_data: ^dm.Dot_Map,
 	enemies: ^[MAX_ENEMIES]Enemy,
 	enemy_count: int,
 	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
@@ -294,6 +295,8 @@ find_nearest_target :: proc(
 	best := Target_Ref{kind = .None, index = -1}
 	best_dist_sq: f32 = COMBAT_RANGE * COMBAT_RANGE + 1
 	range_sq: f32 = COMBAT_RANGE * COMBAT_RANGE
+	best_same_platform := false
+	player_platform_y := get_platform_y_under_pos(map_data, p.pos)
 
 	for i in 0 ..< enemy_count {
 		e := &enemies[i]
@@ -301,23 +304,30 @@ find_nearest_target :: proc(
 			continue
 		}
 		center := get_enemy_center(e)
-		dx := center.x - player_pos.x
-		dy := center.y - player_pos.y
+		dx := center.x - p.pos.x
+		dy := center.y - p.pos.y
 		dist_sq := dx * dx + dy * dy
-		if dist_sq <= range_sq && dist_sq < best_dist_sq {
+		same_platform := enemy_on_platform(e, map_data, player_platform_y)
+		if dist_sq <= range_sq &&
+			((same_platform && !best_same_platform) ||
+			(same_platform == best_same_platform && dist_sq < best_dist_sq)) {
 			best_dist_sq = dist_sq
 			best = {kind = .Enemy, index = i}
+			best_same_platform = same_platform
 		}
 	}
 
 	for i in 0 ..< sign_count {
+		if best_same_platform {
+			break
+		}
 		sign := &signs[i]
 		if !sign.active {
 			continue
 		}
 		center := get_decorative_sign_center(sign)
-		dx := center.x - player_pos.x
-		dy := center.y - player_pos.y
+		dx := center.x - p.pos.x
+		dy := center.y - p.pos.y
 		dist_sq := dx * dx + dy * dy
 		if dist_sq <= range_sq && dist_sq < best_dist_sq {
 			best_dist_sq = dist_sq
@@ -326,6 +336,30 @@ find_nearest_target :: proc(
 	}
 
 	return best
+}
+
+@(private = "file")
+enemy_on_platform :: proc(e: ^Enemy, map_data: ^dm.Dot_Map, platform_y: int) -> bool {
+	if platform_y < 0 {
+		return false
+	}
+	return get_platform_y_under_pos(map_data, e.pos) == platform_y
+}
+
+@(private = "file")
+get_platform_y_under_pos :: proc(map_data: ^dm.Dot_Map, pos: raylib.Vector2) -> int {
+	tx := int(pos.x) / TILE_SIZE
+	start_y := int(pos.y) / TILE_SIZE
+	if start_y < 0 {
+		start_y = 0
+	}
+
+	for ty in start_y ..< len(map_data.grid) {
+		if is_solid(map_data, tx, ty) {
+			return ty
+		}
+	}
+	return -1
 }
 
 @(private = "file")

@@ -19,7 +19,10 @@ Game_State :: struct {
 	waves:         Wave_Encounter,
 	psy_projs:     [MAX_PSYCHIC_PROJECTILES]Psychic_Projectile,
 	psy_proj_count: int,
+	cherub_souls:  int,
 	combat:        Combat_State,
+	music:         raylib.Music,
+	music_loaded:  bool,
 	hit_flash_shader: raylib.Shader,
 	render_target:    raylib.RenderTexture2D,
 	screen_scale:  f32,
@@ -120,6 +123,7 @@ unload_map_data :: proc() {
 
 init :: proc() {
 	raylib.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Inversion")
+	raylib.InitAudioDevice()
 
 	when ODIN_ARCH != .wasm32 && ODIN_ARCH != .wasm64p32 {
 		monitor := raylib.GetCurrentMonitor()
@@ -166,6 +170,7 @@ init :: proc() {
 	init_wave_encounter(&gs.waves, &gs.map_data)
 	init_combat(&gs.combat)
 	init_psychic_projectiles()
+	init_music()
 
 	gs.camera = raylib.Camera2D{
 		zoom   = CAMERA_ZOOM,
@@ -207,6 +212,7 @@ update :: proc() {
 		dt = 0.05
 	}
 
+	update_music()
 	update_player(&gs.player, &gs.map_data, dt)
 	update_spear(&gs.spear, &gs.player, dt)
 	update_wave_encounter(
@@ -217,6 +223,7 @@ update :: proc() {
 		&gs.enemy_count,
 		gs.camera,
 	)
+	enemy_states_before := snapshot_enemy_states(&gs.enemies, gs.enemy_count)
 	update_enemies(
 		&gs.enemies,
 		gs.enemy_count,
@@ -226,6 +233,7 @@ update :: proc() {
 		&gs.psy_proj_count,
 		dt,
 	)
+	collect_cherub_souls(&enemy_states_before, &gs.enemies, gs.enemy_count, &gs.cherub_souls)
 	update_psychic_projectiles(&gs.psy_projs, &gs.psy_proj_count, &gs.player, &gs.map_data, dt)
 	update_combat(
 		&gs.combat,
@@ -261,7 +269,7 @@ update :: proc() {
 	draw_combat(&gs.combat, &gs.enemies, gs.enemy_count, &gs.signs, gs.sign_count)
 	raylib.EndMode2D()
 
-	draw_hud(&gs.player)
+	draw_hud(&gs.player, gs.cherub_souls)
 
 	raylib.EndTextureMode()
 
@@ -279,6 +287,59 @@ update :: proc() {
 	raylib.EndDrawing()
 }
 
+@(private = "file")
+init_music :: proc() {
+	if !raylib.IsAudioDeviceReady() {
+		return
+	}
+
+	gs.music = raylib.LoadMusicStream("assets/audio/soundtrack/main_theme.ogg")
+	if !raylib.IsMusicValid(gs.music) {
+		return
+	}
+
+	gs.music.looping = true
+	raylib.SetMusicVolume(gs.music, 0.65)
+	raylib.PlayMusicStream(gs.music)
+	gs.music_loaded = true
+}
+
+@(private = "file")
+update_music :: proc() {
+	if gs.music_loaded {
+		raylib.UpdateMusicStream(gs.music)
+	}
+}
+
+@(private = "file")
+snapshot_enemy_states :: proc(enemies: ^[MAX_ENEMIES]Enemy, count: int) -> [MAX_ENEMIES]Enemy_State {
+	result: [MAX_ENEMIES]Enemy_State
+	for i in 0 ..< count {
+		result[i] = enemies[i].state
+	}
+	return result
+}
+
+@(private = "file")
+collect_cherub_souls :: proc(
+	prev_states: ^[MAX_ENEMIES]Enemy_State,
+	enemies: ^[MAX_ENEMIES]Enemy,
+	count: int,
+	cherub_souls: ^int,
+) {
+	for i in 0 ..< count {
+		e := &enemies[i]
+		if prev_states[i] != .Dead && e.state == .Dead && enemy_gives_cherub_soul(e) {
+			cherub_souls^ += 1
+		}
+	}
+}
+
+@(private = "file")
+enemy_gives_cherub_soul :: proc(e: ^Enemy) -> bool {
+	return e.type == .Cherub || e.type == .Mutant_Cherub
+}
+
 should_run :: proc() -> bool {
 	return !raylib.WindowShouldClose() && !gs.should_quit
 }
@@ -286,6 +347,9 @@ should_run :: proc() -> bool {
 shutdown :: proc() {
 	raylib.UnloadShader(gs.hit_flash_shader)
 	raylib.UnloadRenderTexture(gs.render_target)
+	if gs.music_loaded {
+		raylib.UnloadMusicStream(gs.music)
+	}
 	unload_map_data()
 	unload_combat()
 	unload_psychic_projectiles()
@@ -293,6 +357,9 @@ shutdown :: proc() {
 	unload_enemies()
 	unload_spear(&gs.spear)
 	unload_player(&gs.player)
+	if raylib.IsAudioDeviceReady() {
+		raylib.CloseAudioDevice()
+	}
 	raylib.CloseWindow()
 }
 

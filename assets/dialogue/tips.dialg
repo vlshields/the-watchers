@@ -1,0 +1,18 @@
+*tips/hints to help player learn the games controls. if tips are enabled, player must perform the action that the tip describes to close the related
+dialogue box. dynamically update the input method based on wether they are using gamepad or keeb*
+
+[TIP 1]
+NARRATOR: Press **summon spear** to summon your weapon
+[END]
+
+[TIP 2] - triggered as soon as an enemy is in range
+NARRATOR: Press **throw spear** to throw your weapon at an enemy. It will automatically target the closest foe.
+[END]
+
+[TIP 3] 
+NARRATOR: Press **throw spear** and then **teleport** to instantly transmit yor body to your weapons location. if you slam into a foe, it will deal great damage
+[END]
+
+[TIP 4] - triggered when the decorative sign is in view
+NARRATOR: your weapon can target certain objects too. This allows you to teleport through platforms. Try it on that sign.
+[END]

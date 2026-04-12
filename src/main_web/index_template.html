@@ -28,6 +28,7 @@
 	<canvas class="game_canvas" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1" onmousedown="event.target.focus()"></canvas>
 	<script type="text/javascript" src="odin.js"></script>
 	<script>
+		var buildAssetVersion = "controls-labels-v2";
 		var odinMemoryInterface = new odin.WasmMemoryInterface();
 		odinMemoryInterface.setIntSize(4);
 		var odinImports = odin.setupDefaultImports(odinMemoryInterface);
@@ -39,7 +40,7 @@
 					...imports
 				}
 
-				return WebAssembly.instantiateStreaming(fetch("index.wasm"), newImports).then(function(output) {
+				return WebAssembly.instantiateStreaming(fetch("index.wasm?v=" + buildAssetVersion, {cache: "no-store"}), newImports).then(function(output) {
 					var e = output.instance.exports;
 					odinMemoryInterface.setExports(e);
 					odinMemoryInterface.setMemory(e.memory);

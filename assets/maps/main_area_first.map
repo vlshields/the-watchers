@@ -62,9 +62,8 @@ metadata {
     w: {
         tiles:[
 
-            assets/tiles/ground_blood1.png,
-            assets/tiles/ground_blood3.png,
-            assets/tiles/ground_blood1.png,
+            
+     
             assets/tiles/ground.png
         ],
         passable:false,
@@ -76,7 +75,7 @@ metadata {
         o: {
         tiles:[
 
-            assets/tiles/ground.png
+            assets/tiles/ground_blood1.png,
         ],
         passable:false,
         collectable:false,

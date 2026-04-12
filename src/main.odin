@@ -26,6 +26,8 @@ Game_State :: struct {
 	combat:        Combat_State,
 	music:         raylib.Music,
 	music_loaded:  bool,
+	parallax_bg:   [PARALLAX_LAYER_COUNT]raylib.Texture2D,
+	parallax_origin: raylib.Vector2,
 	hit_flash_shader: raylib.Shader,
 	render_target:    raylib.RenderTexture2D,
 	screen_scale:  f32,
@@ -148,6 +150,7 @@ init :: proc() {
 	update_screen_scale()
 
 	gs.bg_color = {0x1a, 0x1a, 0x2e, 0xff}
+	init_parallax_background()
 
 	// Load map
 	if !load_map_data("assets/maps/main_area_first.map") {
@@ -189,6 +192,7 @@ init :: proc() {
 		offset = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2},
 		target = spawn_pos,
 	}
+	gs.parallax_origin = gs.camera.target
 
 	// White flash shader for player damage
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
@@ -300,6 +304,7 @@ update :: proc() {
 	raylib.BeginTextureMode(gs.render_target)
 	raylib.ClearBackground(gs.bg_color)
 
+	draw_parallax_background(gs.camera)
 	raylib.BeginMode2D(gs.camera)
 	draw_map(gs.camera)
 	draw_decorative_signs(&gs.signs, gs.sign_count)
@@ -423,6 +428,7 @@ shutdown :: proc() {
 	if gs.music_loaded {
 		raylib.UnloadMusicStream(gs.music)
 	}
+	unload_parallax_background()
 	unload_sfx()
 	unload_map_data()
 	unload_combat()
@@ -486,6 +492,79 @@ draw_render_target_to_window :: proc() {
 	}
 	raylib.DrawTexturePro(gs.render_target.texture, src, dst, {0, 0}, 0, raylib.WHITE)
 	raylib.EndDrawing()
+}
+
+// ---------------------------------------------------------------------------
+// Parallax background
+// ---------------------------------------------------------------------------
+
+@(private = "file")
+init_parallax_background :: proc() {
+	paths := [?]string{
+		"assets/sprites/parralax_bg/bg0.png",
+		"assets/sprites/parralax_bg/bg1.png",
+		"assets/sprites/parralax_bg/bg2.png",
+		"assets/sprites/parralax_bg/bg3.png",
+		"assets/sprites/parralax_bg/bg4.png",
+	}
+	for path, i in paths {
+		cpath := strings.clone_to_cstring(path)
+		defer delete(cpath)
+		gs.parallax_bg[i] = raylib.LoadTexture(cpath)
+		if gs.parallax_bg[i].id <= 0 {
+			fmt.eprintln("Failed to load parallax background:", path)
+		}
+	}
+}
+
+@(private = "file")
+unload_parallax_background :: proc() {
+	for tex in gs.parallax_bg {
+		if tex.id > 0 {
+			raylib.UnloadTexture(tex)
+		}
+	}
+}
+
+@(private = "file")
+draw_parallax_background :: proc(cam: raylib.Camera2D) {
+	parallax := [?]f32{0.02, 0.05, 0.09, 0.14, 0.22}
+	for tex, i in gs.parallax_bg {
+		if tex.id <= 0 {
+			continue
+		}
+		draw_tiled_parallax_layer(tex, cam.target, parallax[i])
+	}
+}
+
+@(private = "file")
+draw_tiled_parallax_layer :: proc(tex: raylib.Texture2D, camera_target: raylib.Vector2, amount: f32) {
+	w := f32(tex.width)
+	h := f32(tex.height)
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	camera_delta := raylib.Vector2{
+		camera_target.x - gs.parallax_origin.x,
+		camera_target.y - gs.parallax_origin.y,
+	}
+	x0 := wrap_parallax_offset(-camera_delta.x * amount, w)
+	for x := x0; x < f32(SCREEN_WIDTH); x += w {
+		raylib.DrawTexture(tex, i32(x), 0, raylib.WHITE)
+	}
+}
+
+@(private = "file")
+wrap_parallax_offset :: proc(value, size: f32) -> f32 {
+	result := value
+	for result <= -size {
+		result += size
+	}
+	for result > 0 {
+		result -= size
+	}
+	return result
 }
 
 // ---------------------------------------------------------------------------

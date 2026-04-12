@@ -7,6 +7,9 @@ import "core:strings"
 import "core:math/rand"
 
 Game_State :: struct {
+	mode:          Game_Mode,
+	menu:          Menu_State,
+	hints:         Hints_State,
 	map_data:      dm.Dot_Map,
 	tile_textures: map[u8][dynamic]raylib.Texture2D,
 	camera:        raylib.Camera2D,
@@ -31,6 +34,12 @@ Game_State :: struct {
 	window_h:      i32,
 	should_quit:   bool,
 	bg_color:      raylib.Color,
+}
+
+Game_Mode :: enum {
+	Menu,
+	Playing,
+	Paused,
 }
 
 @(private = "file")
@@ -171,6 +180,8 @@ init :: proc() {
 	init_combat(&gs.combat)
 	init_psychic_projectiles()
 	init_sfx()
+	init_menu(&gs.menu)
+	init_hints(&gs.hints)
 	init_music()
 
 	gs.camera = raylib.Camera2D{
@@ -214,6 +225,26 @@ update :: proc() {
 	}
 
 	update_music()
+	update_menu_input_mode(&gs.menu)
+	if gs.mode == .Menu || gs.mode == .Paused {
+		update_menu(&gs.menu)
+		draw_menu_frame(&gs.menu)
+		return
+	}
+
+	if raylib.IsKeyPressed(.ESCAPE) || (gamepad_active() && raylib.IsGamepadButtonPressed(GAMEPAD_ID, .MIDDLE_RIGHT)) {
+		gs.mode = .Paused
+		gs.menu.screen = .Main
+		gs.menu.selected = 0
+		play_sfx(.Ui_Back)
+		draw_menu_frame(&gs.menu)
+		return
+	}
+
+	prev_spear_state := gs.spear.state
+	prev_throw_phase := gs.combat.throw_phase
+	prev_player_teleporting := gs.player.is_teleporting
+	prev_active_signs := active_sign_count(&gs.signs, gs.sign_count)
 	update_player(&gs.player, &gs.map_data, dt)
 	update_spear(&gs.spear, &gs.player, dt)
 	update_wave_encounter(
@@ -247,7 +278,23 @@ update :: proc() {
 		gs.sign_count,
 		dt,
 	)
+	hint_events := Hint_Events{
+		spear_summoned = prev_spear_state == .Inactive && gs.spear.state == .Spawning,
+		spear_thrown = prev_throw_phase == .None && gs.combat.throw_phase != .None,
+		teleported = !prev_player_teleporting && gs.player.is_teleporting,
+		sign_used = active_sign_count(&gs.signs, gs.sign_count) < prev_active_signs,
+	}
 	update_camera(dt)
+	update_hints(
+		&gs.hints,
+		hint_events,
+		&gs.player,
+		&gs.enemies,
+		gs.enemy_count,
+		&gs.signs,
+		gs.sign_count,
+		gs.camera,
+	)
 
 	// Draw to virtual render target
 	raylib.BeginTextureMode(gs.render_target)
@@ -271,21 +318,12 @@ update :: proc() {
 	raylib.EndMode2D()
 
 	draw_hud(&gs.player, gs.cherub_souls)
+	draw_hints(&gs.hints, gs.menu.input_mode, gs.menu.hints_enabled)
 
 	raylib.EndTextureMode()
 
 	// Blit render target scaled to window
-	raylib.BeginDrawing()
-	raylib.ClearBackground(raylib.BLACK)
-	src := raylib.Rectangle{0, 0, f32(SCREEN_WIDTH), -f32(SCREEN_HEIGHT)}
-	dst := raylib.Rectangle{
-		gs.screen_offset.x,
-		gs.screen_offset.y,
-		f32(SCREEN_WIDTH) * gs.screen_scale,
-		f32(SCREEN_HEIGHT) * gs.screen_scale,
-	}
-	raylib.DrawTexturePro(gs.render_target.texture, src, dst, {0, 0}, 0, raylib.WHITE)
-	raylib.EndDrawing()
+	draw_render_target_to_window()
 }
 
 @(private = "file")
@@ -300,7 +338,7 @@ init_music :: proc() {
 	}
 
 	gs.music.looping = true
-	raylib.SetMusicVolume(gs.music, 0.65)
+	raylib.SetMusicVolume(gs.music, gs.menu.music_volume)
 	raylib.PlayMusicStream(gs.music)
 	gs.music_loaded = true
 }
@@ -310,6 +348,40 @@ update_music :: proc() {
 	if gs.music_loaded {
 		raylib.UpdateMusicStream(gs.music)
 	}
+}
+
+set_music_volume :: proc(volume: f32) {
+	gs.menu.music_volume = clamp01(volume)
+	if gs.music_loaded {
+		raylib.SetMusicVolume(gs.music, gs.menu.music_volume)
+	}
+}
+
+play_game_from_menu :: proc() {
+	gs.mode = .Playing
+}
+
+resume_game_from_pause :: proc() {
+	gs.mode = .Playing
+}
+
+quit_from_menu :: proc() {
+	gs.should_quit = true
+}
+
+menu_is_paused :: proc() -> bool {
+	return gs.mode == .Paused
+}
+
+@(private = "file")
+active_sign_count :: proc(signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign, count: int) -> int {
+	result := 0
+	for i in 0 ..< count {
+		if signs[i].active {
+			result += 1
+		}
+	}
+	return result
 }
 
 @(private = "file")
@@ -376,6 +448,44 @@ set_web_mouse_pos :: proc(x, y: int) {
 }
 
 set_web_mouse_down :: proc(down: bool) {
+}
+
+@(private = "file")
+draw_menu_frame :: proc(menu: ^Menu_State) {
+	raylib.BeginTextureMode(gs.render_target)
+	raylib.ClearBackground(MENU_BG)
+	draw_menu_contents(menu)
+	raylib.EndTextureMode()
+	draw_render_target_to_window()
+}
+
+virtual_mouse_pos :: proc() -> (raylib.Vector2, bool) {
+	mouse := raylib.GetMousePosition()
+	if gs.screen_scale <= 0 {
+		return mouse, false
+	}
+
+	pos := raylib.Vector2{
+		(mouse.x - gs.screen_offset.x) / gs.screen_scale,
+		(mouse.y - gs.screen_offset.y) / gs.screen_scale,
+	}
+	in_bounds := pos.x >= 0 && pos.x <= SCREEN_WIDTH && pos.y >= 0 && pos.y <= SCREEN_HEIGHT
+	return pos, in_bounds
+}
+
+@(private = "file")
+draw_render_target_to_window :: proc() {
+	raylib.BeginDrawing()
+	raylib.ClearBackground(raylib.BLACK)
+	src := raylib.Rectangle{0, 0, f32(SCREEN_WIDTH), -f32(SCREEN_HEIGHT)}
+	dst := raylib.Rectangle{
+		gs.screen_offset.x,
+		gs.screen_offset.y,
+		f32(SCREEN_WIDTH) * gs.screen_scale,
+		f32(SCREEN_HEIGHT) * gs.screen_scale,
+	}
+	raylib.DrawTexturePro(gs.render_target.texture, src, dst, {0, 0}, 0, raylib.WHITE)
+	raylib.EndDrawing()
 }
 
 // ---------------------------------------------------------------------------

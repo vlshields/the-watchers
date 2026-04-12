@@ -25,6 +25,10 @@ SFX_COUNT :: int(Sfx_Id.Count)
 sfx_sounds: [SFX_COUNT]raylib.Sound
 @(private = "file")
 sfx_loaded: [SFX_COUNT]bool
+@(private = "file")
+sfx_base_volumes: [SFX_COUNT]f32
+@(private = "file")
+sfx_volume_level: f32 = 1.0
 
 init_sfx :: proc() {
 	if !raylib.IsAudioDeviceReady() {
@@ -63,6 +67,19 @@ play_sfx :: proc(id: Sfx_Id) {
 	raylib.PlaySound(sfx_sounds[idx])
 }
 
+set_sfx_volume :: proc(volume: f32) {
+	sfx_volume_level = clamp01(volume)
+	for i in 0 ..< SFX_COUNT {
+		if sfx_loaded[i] {
+			raylib.SetSoundVolume(sfx_sounds[i], sfx_base_volumes[i] * sfx_volume_level)
+		}
+	}
+}
+
+sfx_volume :: proc() -> f32 {
+	return sfx_volume_level
+}
+
 @(private = "file")
 load_sfx :: proc(id: Sfx_Id, path: cstring, volume: f32) {
 	idx := int(id)
@@ -78,4 +95,6 @@ load_sfx :: proc(id: Sfx_Id, path: cstring, volume: f32) {
 	raylib.SetSoundVolume(sound, volume)
 	sfx_sounds[idx] = sound
 	sfx_loaded[idx] = true
+	sfx_base_volumes[idx] = volume
+	raylib.SetSoundVolume(sfx_sounds[idx], sfx_base_volumes[idx] * sfx_volume_level)
 }

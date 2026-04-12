@@ -291,6 +291,7 @@ enemy_take_damage :: proc(e: ^Enemy, damage: int) {
 	e.hit_timer = 0.3
 	e.current_frame = 0
 	e.anim_timer = 0
+	play_sfx(.Hit)
 }
 
 enemy_take_teleport_strike :: proc(e: ^Enemy, knockback_dir: f32) {
@@ -354,6 +355,7 @@ update_enemy :: proc(
 			// Fire projectile on second-to-last frame
 			if !e.attack_fired && int(e.current_frame) >= cherub_attack_frames - 1 {
 				e.attack_fired = true
+				play_sfx(.Enemy_Cherub_Attack)
 				if proj_count^ < MAX_PSYCHIC_PROJECTILES {
 					center := get_enemy_center(e)
 					player_hb := get_hitbox(player)
@@ -395,6 +397,7 @@ update_enemy :: proc(
 				e.attack_fx_active = true
 				e.attack_fx_frame = 0
 				e.attack_fx_timer = 0
+				play_sfx(.Enemy_Ghoul_Attack)
 			}
 			// Update FX animation and check collision
 			if e.attack_fx_active {
@@ -427,6 +430,7 @@ update_enemy :: proc(
 				e.attack_fx_active = true
 				e.attack_fx_frame = 0
 				e.attack_fx_timer = 0
+				play_sfx(.Enemy_Mutant_Cherub_Attack)
 			}
 			if e.attack_fx_active {
 				e.attack_fx_timer += dt
@@ -558,6 +562,9 @@ update_enemy :: proc(
 				e.state = .Chase
 				e.current_frame = 0
 				e.anim_timer = 0
+				if e.type == .Mutant_Cherub {
+					play_sfx(.Enemy_Mutant_Cherub_Aggroed)
+				}
 				enemy_apply_gravity(e, map_data, dt)
 				return
 			}

@@ -104,6 +104,7 @@ update_combat :: proc(
 		if teleport_player_to_spear(p, map_data, c.projectile_pos) {
 			if strike_target >= 0 {
 				enemy_take_teleport_strike(&enemies[strike_target], knockback_dir)
+				play_sfx(.Player_Teleport_Slam_Impact)
 			}
 			if c.target_kind == .Sign && c.target_index >= 0 && c.target_index < sign_count {
 				signs[c.target_index].active = false
@@ -171,6 +172,7 @@ update_combat :: proc(
 			c.throw_phase = .Flying
 			c.spin_frame = 0
 			c.spin_timer = 0
+			play_sfx(.Player_Spear_Traveling)
 		}
 	case .Flying:
 		prev_pos := c.projectile_pos

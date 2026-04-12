@@ -170,6 +170,7 @@ init :: proc() {
 	init_wave_encounter(&gs.waves, &gs.map_data)
 	init_combat(&gs.combat)
 	init_psychic_projectiles()
+	init_sfx()
 	init_music()
 
 	gs.camera = raylib.Camera2D{
@@ -350,6 +351,7 @@ shutdown :: proc() {
 	if gs.music_loaded {
 		raylib.UnloadMusicStream(gs.music)
 	}
+	unload_sfx()
 	unload_map_data()
 	unload_combat()
 	unload_psychic_projectiles()

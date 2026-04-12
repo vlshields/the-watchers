@@ -29,6 +29,7 @@ Player :: struct {
 	anim_timer:        f32,
 	hit_timer:         f32,
 	teleport_invuln_timer: f32,
+	footstep_timer:   f32,
 }
 
 init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
@@ -44,6 +45,7 @@ init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
 	p.current_frame = 0
 	p.anim_timer = 0
 	p.teleport_invuln_timer = 0
+	p.footstep_timer = 0
 
 	p.move_tex = raylib.LoadTexture("assets/sprites/player_move.png")
 	p.idle_tex = raylib.LoadTexture("assets/sprites/player_idle.png")
@@ -78,6 +80,7 @@ player_take_damage :: proc(p: ^Player, damage: int) {
 		p.hp = 0
 	}
 	p.hit_timer = PLAYER_HIT_FLASH_DURATION
+	play_sfx(.Hit)
 }
 
 update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
@@ -112,6 +115,7 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 		p.vel.y = JUMP_VELOCITY
 		p.on_ground = false
 		p.jumps_left -= 1
+		play_sfx(.Player_Jump)
 	}
 
 	// Gravity
@@ -135,6 +139,8 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 		animate_player_throw(p, dt)
 		return
 	}
+
+	update_player_footsteps(p, dt)
 
 	// Animation state transitions
 	rising := p.vel.y < 0
@@ -224,6 +230,21 @@ start_player_teleport_animation :: proc(p: ^Player) {
 	p.current_frame = 0
 	p.anim_timer = 0
 	p.teleport_invuln_timer = ANIM_PLAYER_TELEPORT_TIME
+	play_sfx(.Player_Teleport)
+}
+
+@(private = "file")
+update_player_footsteps :: proc(p: ^Player, dt: f32) {
+	if !p.on_ground || !p.moving {
+		p.footstep_timer = 0
+		return
+	}
+
+	p.footstep_timer -= dt
+	if p.footstep_timer <= 0 {
+		play_sfx(.Player_Footstep)
+		p.footstep_timer = PLAYER_FOOTSTEP_INTERVAL
+	}
 }
 
 @(private = "file")

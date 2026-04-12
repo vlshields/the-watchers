@@ -60,6 +60,7 @@ update_spear :: proc(s: ^Spear, p: ^Player, dt: f32) {
 			s.moving = p.moving
 			s.current_frame = 0
 			s.anim_timer = 0
+			play_sfx(.Player_Spear_Spawn)
 		}
 
 	case .Spawning:

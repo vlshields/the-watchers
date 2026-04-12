@@ -500,17 +500,13 @@ update_enemy :: proc(
 			e.attack_hit_player = false
 		} else {
 			speed: f32 = e.facing_left ? -chase_speed : chase_speed
+			old_x := e.pos.x
 			e.pos.x += speed * dt
 
 			hb := get_enemy_hitbox(e)
 			if check_rect_solid(map_data, hb) || enemy_would_leave_supported_ground(e, map_data) {
-				if speed > 0 {
-					tile_x := int(hb.x + hb.width) / TILE_SIZE
-					e.pos.x = f32(tile_x * TILE_SIZE) - half_hw
-				} else {
-					tile_x := int(hb.x) / TILE_SIZE
-					e.pos.x = f32((tile_x + 1) * TILE_SIZE) + half_hw
-				}
+				e.pos.x = old_x
+				move_frames = 0
 			}
 		}
 
@@ -588,17 +584,12 @@ update_enemy :: proc(
 			enemy_apply_gravity(e, map_data, dt)
 		} else {
 			speed: f32 = e.facing_left ? -patrol_speed : patrol_speed
+			old_x := e.pos.x
 			e.pos.x += speed * dt
 
 			hb := get_enemy_hitbox(e)
 			if check_rect_solid(map_data, hb) || enemy_would_leave_supported_ground(e, map_data) {
-				if speed > 0 {
-					tile_x := int(hb.x + hb.width) / TILE_SIZE
-					e.pos.x = f32(tile_x * TILE_SIZE) - half_hw
-				} else {
-					tile_x := int(hb.x) / TILE_SIZE
-					e.pos.x = f32((tile_x + 1) * TILE_SIZE) + half_hw
-				}
+				e.pos.x = old_x
 				e.facing_left = !e.facing_left
 			}
 
@@ -633,16 +624,11 @@ enemy_apply_knockback :: proc(e: ^Enemy, map_data: ^dm.Dot_Map, dt: f32) {
 		return
 	}
 
+	old_x := e.pos.x
 	e.pos.x += e.vel_x * dt
 	hb := get_enemy_hitbox(e)
 	if check_rect_solid(map_data, hb) || enemy_would_leave_supported_ground(e, map_data) {
-		if e.vel_x > 0 {
-			tile_x := int(hb.x + hb.width) / TILE_SIZE
-			e.pos.x = f32(tile_x * TILE_SIZE) - hb.width / 2
-		} else {
-			tile_x := int(hb.x) / TILE_SIZE
-			e.pos.x = f32((tile_x + 1) * TILE_SIZE) + hb.width / 2
-		}
+		e.pos.x = old_x
 		e.vel_x = 0
 		return
 	}

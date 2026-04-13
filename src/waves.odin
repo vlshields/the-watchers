@@ -121,19 +121,34 @@ spawn_next_wave :: proc(
 	spawn_count := enemies_per_current_wave(w)
 	w.current_wave += 1
 	for _ in 0 ..< spawn_count {
-		if enemy_count^ >= MAX_ENEMIES {
+		slot := acquire_enemy_slot(enemies, enemy_count)
+		if slot < 0 {
 			return
 		}
 
 		enemy_type := w.enemy_types[rand.int_max(w.enemy_type_count)]
 		pos := choose_wave_spawn_pos(w, camera)
-		e := &enemies[enemy_count^]
+		e := &enemies[slot]
 		init_enemy_at(e, enemy_type, pos)
 		e.aggroed = true
 		e.wave_spawned = true
 		e.state = .Chase
-		enemy_count^ += 1
 	}
+}
+
+@(private = "file")
+acquire_enemy_slot :: proc(enemies: ^[MAX_ENEMIES]Enemy, enemy_count: ^int) -> int {
+	for i in 0 ..< enemy_count^ {
+		if enemies[i].state == .Inactive {
+			return i
+		}
+	}
+	if enemy_count^ >= MAX_ENEMIES {
+		return -1
+	}
+	idx := enemy_count^
+	enemy_count^ += 1
+	return idx
 }
 
 @(private = "file")

@@ -208,8 +208,10 @@ update :: proc() {
 	update_menu_input_mode(&gs.menu)
 	if gs.mode == .Cutscene {
 		update_cutscene(dt)
-		draw_cutscene_frame()
-		return
+		if gs.mode == .Cutscene {
+			draw_cutscene_frame()
+			return
+		}
 	}
 	if gs.mode == .Menu || gs.mode == .Paused || gs.mode == .Game_Over || gs.mode == .Victory {
 		update_menu(&gs.menu)
@@ -313,7 +315,7 @@ update :: proc() {
 	draw_combat(&gs.combat, &gs.enemies, gs.enemy_count, &gs.signs, gs.sign_count)
 	raylib.EndMode2D()
 
-	draw_hud(&gs.player, gs.cherub_souls)
+	draw_hud(&gs.player, gs.cherub_souls, current_objective_text())
 	draw_hints(&gs.hints, gs.menu.input_mode, gs.menu.hints_enabled)
 
 	raylib.EndTextureMode()
@@ -344,8 +346,8 @@ init_music :: proc() {
 
 	gs.cutscene_music = raylib.LoadMusicStream("assets/audio/soundtrack/cutscene.ogg")
 
-	gs.cutscene_music.looping = true
 	if raylib.IsMusicValid(gs.cutscene_music) {
+		gs.cutscene_music.looping = false
 		raylib.SetMusicVolume(gs.cutscene_music, gs.menu.music_volume)
 		gs.cutscene_music_loaded = true
 	}
@@ -362,8 +364,12 @@ update_music :: proc() {
 	if gs.main_menu_music_loaded && raylib.IsMusicStreamPlaying(gs.main_menu_music) {
 		raylib.UpdateMusicStream(gs.main_menu_music)
 	}
-	if gs.cutscene_music_loaded && raylib.IsMusicStreamPlaying(gs.cutscene_music) {
-		raylib.UpdateMusicStream(gs.cutscene_music)
+	if gs.cutscene_music_loaded && gs.mode == .Cutscene {
+		if raylib.IsMusicStreamPlaying(gs.cutscene_music) {
+			raylib.UpdateMusicStream(gs.cutscene_music)
+		} else {
+			raylib.PlayMusicStream(gs.cutscene_music)
+		}
 	}
 }
 
@@ -446,6 +452,17 @@ restart_game_from_victory :: proc() {
 
 return_to_main_from_victory :: proc() {
 	return_to_main_from_game_over()
+}
+
+@(private = "file")
+current_objective_text :: proc() -> cstring {
+	switch gs.waves.state {
+	case .Ready, .Inactive:
+		return "Find the highest platform!"
+	case .Running, .Complete:
+		return "Survive the enemy waves and harvest more Cherub Souls."
+	}
+	return ""
 }
 
 Cutscene_Line :: struct {

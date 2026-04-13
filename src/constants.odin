@@ -155,6 +155,10 @@ HUD_TEXT_BG_Y :: 4
 HUD_TEXT_BG_W :: 112
 HUD_TEXT_BG_H :: 30
 HUD_TEXT_BG_COLOR :: raylib.Color{0x00, 0x00, 0x00, 0xa0}
+HUD_OBJECTIVE_Y :: 8
+HUD_OBJECTIVE_FONT_SIZE :: 10
+HUD_OBJECTIVE_PAD_X :: 8
+HUD_OBJECTIVE_PAD_Y :: 4
 HP_BAR_COLOR         :: raylib.Color{0xf0, 0x21, 0x58, 0xff}
 HP_BAR_BG_COLOR      :: raylib.Color{0x30, 0x10, 0x18, 0xff}
 HP_BAR_OUTLINE_COLOR :: raylib.Color{0x00, 0x00, 0x00, 0xff}

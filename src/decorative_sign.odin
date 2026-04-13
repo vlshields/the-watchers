@@ -51,6 +51,24 @@ unload_decorative_signs :: proc() {
 	raylib.UnloadTexture(decorative_sign_tex)
 }
 
+update_decorative_signs :: proc(
+	signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign,
+	count: int,
+	player: ^Player,
+) {
+	// Respawn signs when the player falls below the platform they sit on,
+	// so they can't get locked out of areas only reachable via spear teleport.
+	for i in 0 ..< count {
+		sign := &signs[i]
+		if sign.active {
+			continue
+		}
+		if player.pos.y > sign.pos.y {
+			sign.active = true
+		}
+	}
+}
+
 draw_decorative_signs :: proc(signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign, count: int) {
 	for i in 0 ..< count {
 		sign := &signs[i]

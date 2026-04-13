@@ -281,6 +281,7 @@ update :: proc() {
 		teleported = !prev_player_teleporting && gs.player.is_teleporting,
 		sign_used = active_sign_count(&gs.signs, gs.sign_count) < prev_active_signs,
 	}
+	update_decorative_signs(&gs.signs, gs.sign_count, &gs.player)
 	update_camera(dt)
 	update_hints(
 		&gs.hints,

@@ -1,4 +1,16 @@
-v1.0.1 (current)
+v1.0.2 (current)
+-----------------------------------
+
+- Lowered the win condition from 30 cherub souls to 20.
+
+- Fixed potential player lockout from the top platform.
+- adjusted map platform spacing.
+
+- Fixed bug where enemies stopped spawning before the player reached 30 kills.
+
+- Fixed potion drinking sound effect.
+
+v1.0.1
 -----------------------------------
 
 - Fixed critical bug where the game would freeze if the player cycled through the dialogue boxes.

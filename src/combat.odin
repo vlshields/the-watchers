@@ -81,17 +81,9 @@ update_combat :: proc(
 				set_combat_target(c, target)
 			}
 		}
-		if input_cycle_target() && c.cycle_cooldown <= 0 && c.throw_phase == .None {
-			cycle_target_in_range(c, p.pos, enemies, enemy_count, signs, sign_count)
-			c.cycle_cooldown = 0.2
-		}
 	} else if c.target_mode == .Manual && c.throw_phase == .None {
 		c.target_mode = .None
 		clear_combat_target(c)
-	}
-
-	if c.cycle_cooldown > 0 {
-		c.cycle_cooldown -= dt
 	}
 
 	if input_spear_teleport() && spear_can_teleport(c) {

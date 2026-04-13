@@ -25,7 +25,11 @@ Game_State :: struct {
 	cherub_souls:  int,
 	combat:        Combat_State,
 	music:         raylib.Music,
+	main_menu_music: raylib.Music,
+	cutscene_music: raylib.Music,
 	music_loaded:  bool,
+	main_menu_music_loaded: bool,
+	cutscene_music_loaded: bool,
 	parallax_bg:   [PARALLAX_LAYER_COUNT]raylib.Texture2D,
 	parallax_origin: raylib.Vector2,
 	hit_flash_shader: raylib.Shader,
@@ -36,10 +40,14 @@ Game_State :: struct {
 	window_h:      i32,
 	should_quit:   bool,
 	bg_color:      raylib.Color,
+	cutscene_line: int,
+	cutscene_shake: f32,
+	cutscene_played: bool,
 }
 
 Game_Mode :: enum {
 	Menu,
+	Cutscene,
 	Playing,
 	Paused,
 	Game_Over,
@@ -198,6 +206,11 @@ update :: proc() {
 
 	update_music()
 	update_menu_input_mode(&gs.menu)
+	if gs.mode == .Cutscene {
+		update_cutscene(dt)
+		draw_cutscene_frame()
+		return
+	}
 	if gs.mode == .Menu || gs.mode == .Paused || gs.mode == .Game_Over || gs.mode == .Victory {
 		update_menu(&gs.menu)
 		draw_menu_frame(&gs.menu)
@@ -316,20 +329,41 @@ init_music :: proc() {
 	}
 
 	gs.music = raylib.LoadMusicStream("assets/audio/soundtrack/main_theme.ogg")
-	if !raylib.IsMusicValid(gs.music) {
-		return
+	if raylib.IsMusicValid(gs.music) {
+		gs.music.looping = true
+		raylib.SetMusicVolume(gs.music, gs.menu.music_volume)
+		gs.music_loaded = true
 	}
 
-	gs.music.looping = true
-	raylib.SetMusicVolume(gs.music, gs.menu.music_volume)
-	raylib.PlayMusicStream(gs.music)
-	gs.music_loaded = true
+	gs.main_menu_music = raylib.LoadMusicStream("assets/audio/soundtrack/main_menu.ogg")
+	if raylib.IsMusicValid(gs.main_menu_music) {
+		gs.main_menu_music.looping = true
+		raylib.SetMusicVolume(gs.main_menu_music, gs.menu.music_volume)
+		gs.main_menu_music_loaded = true
+	}
+
+	gs.cutscene_music = raylib.LoadMusicStream("assets/audio/soundtrack/cutscene.ogg")
+
+	gs.cutscene_music.looping = true
+	if raylib.IsMusicValid(gs.cutscene_music) {
+		raylib.SetMusicVolume(gs.cutscene_music, gs.menu.music_volume)
+		gs.cutscene_music_loaded = true
+	}
+	if gs.main_menu_music_loaded {
+		raylib.PlayMusicStream(gs.main_menu_music)
+	}
 }
 
 @(private = "file")
 update_music :: proc() {
-	if gs.music_loaded {
+	if gs.music_loaded && raylib.IsMusicStreamPlaying(gs.music) {
 		raylib.UpdateMusicStream(gs.music)
+	}
+	if gs.main_menu_music_loaded && raylib.IsMusicStreamPlaying(gs.main_menu_music) {
+		raylib.UpdateMusicStream(gs.main_menu_music)
+	}
+	if gs.cutscene_music_loaded && raylib.IsMusicStreamPlaying(gs.cutscene_music) {
+		raylib.UpdateMusicStream(gs.cutscene_music)
 	}
 }
 
@@ -338,10 +372,26 @@ set_music_volume :: proc(volume: f32) {
 	if gs.music_loaded {
 		raylib.SetMusicVolume(gs.music, gs.menu.music_volume)
 	}
+	if gs.main_menu_music_loaded {
+		raylib.SetMusicVolume(gs.main_menu_music, gs.menu.music_volume)
+	}
+	if gs.cutscene_music_loaded {
+		raylib.SetMusicVolume(gs.cutscene_music, gs.menu.music_volume)
+	}
 }
 
 play_game_from_menu :: proc() {
+	if !gs.cutscene_played {
+		enter_cutscene()
+		return
+	}
 	gs.mode = .Playing
+	if gs.main_menu_music_loaded {
+		raylib.StopMusicStream(gs.main_menu_music)
+	}
+	if gs.music_loaded {
+		raylib.PlayMusicStream(gs.music)
+	}
 }
 
 resume_game_from_pause :: proc() {
@@ -382,6 +432,12 @@ return_to_main_from_game_over :: proc() {
 	gs.mode = .Menu
 	gs.menu.screen = .Main
 	gs.menu.selected = 0
+	if gs.music_loaded {
+		raylib.StopMusicStream(gs.music)
+	}
+	if gs.main_menu_music_loaded {
+		raylib.PlayMusicStream(gs.main_menu_music)
+	}
 }
 
 restart_game_from_victory :: proc() {
@@ -390,6 +446,52 @@ restart_game_from_victory :: proc() {
 
 return_to_main_from_victory :: proc() {
 	return_to_main_from_game_over()
+}
+
+Cutscene_Line :: struct {
+	speaker: cstring,
+	text:    cstring,
+	shake:   bool,
+}
+
+@(private = "file")
+MISSION_SCENE : [CUTSCENE_LINE_COUNT]Cutscene_Line : {
+	{"NARRATOR", "Gadreela wakes up in a strange and unfamiliar place.\nIt feels void of space and substance, like a vacuum.\nShe hears a voice...", false},
+	{"SARIEL",   "Gadreela, you have made it to our target.", false},
+	{"GADREELA", "General Sariel? Where am I?", false},
+	{"SARIEL",   "The teleportation worked. You are on Mt. Hermon,\nthe capital fortress of the Watchers,\nour nefarious captors.", false},
+	{"GADREELA", "Ah, yes. I remember my mission now.\nWe need to power our secret weapon, the Laseract.", false},
+	{"SARIEL",   "Yes. Those vile Watchers have created several abominations,\nCherubs being our primary target. The psychic energy bound\nto their souls can power the Laseract enough to destroy Mt. Hermon.", false},
+	{"GADREELA", "I am ready to bring destruction upon evil\nand free our people once and for all.", false},
+	{"SARIEL",   "Then go, and return here once you have collected\nthirty cherub souls. I will be waiting.", false},
+}
+
+@(private = "file")
+enter_cutscene :: proc() {
+	gs.cutscene_line = 0
+	gs.cutscene_shake = 0
+	gs.mode = .Cutscene
+	if gs.main_menu_music_loaded {
+		raylib.StopMusicStream(gs.main_menu_music)
+	}
+	if gs.music_loaded {
+		raylib.StopMusicStream(gs.music)
+	}
+	if gs.cutscene_music_loaded {
+		raylib.PlayMusicStream(gs.cutscene_music)
+	}
+}
+
+@(private = "file")
+finish_cutscene :: proc() {
+	gs.cutscene_played = true
+	gs.mode = .Playing
+	if gs.cutscene_music_loaded {
+		raylib.StopMusicStream(gs.cutscene_music)
+	}
+	if gs.music_loaded {
+		raylib.PlayMusicStream(gs.music)
+	}
 }
 
 @(private = "file")
@@ -466,6 +568,92 @@ find_player_spawn :: proc() -> raylib.Vector2 {
 }
 
 @(private = "file")
+update_cutscene :: proc(dt: f32) {
+	if cutscene_back_pressed() {
+		finish_cutscene()
+		return
+	}
+
+	if gs.cutscene_shake > 0 {
+		gs.cutscene_shake -= dt
+	}
+
+	if cutscene_accept_pressed() {
+		gs.cutscene_line += 1
+		if gs.cutscene_line >= CUTSCENE_LINE_COUNT {
+			finish_cutscene()
+			return
+		}
+		scene := MISSION_SCENE
+		if scene[gs.cutscene_line].shake {
+			gs.cutscene_shake = CUTSCENE_SHAKE_DURATION
+		}
+	}
+}
+
+@(private = "file")
+draw_cutscene_frame :: proc() {
+	raylib.BeginTextureMode(gs.render_target)
+	draw_cutscene()
+	raylib.EndTextureMode()
+	draw_render_target_to_window()
+}
+
+@(private = "file")
+draw_cutscene :: proc() {
+	raylib.ClearBackground(raylib.BLACK)
+
+	scene := MISSION_SCENE
+	line := scene[gs.cutscene_line]
+	shake_x: i32 = 0
+	shake_y: i32 = 0
+	if gs.cutscene_shake > 0 {
+		intensity := gs.cutscene_shake / CUTSCENE_SHAKE_DURATION
+		mag := intensity * 4
+		shake_x = i32(rand.float32_range(-mag, mag))
+		shake_y = i32(rand.float32_range(-mag, mag))
+	}
+
+	box_x := i32(40)
+	box_w := i32(SCREEN_WIDTH) - box_x * 2
+	box_h := i32(112)
+	box_y := i32(SCREEN_HEIGHT) - box_h - 20
+	raylib.DrawRectangle(box_x + shake_x, box_y + shake_y, box_w, box_h, {20, 20, 20, 230})
+	raylib.DrawRectangleLines(box_x + shake_x, box_y + shake_y, box_w, box_h, {100, 100, 100, 200})
+
+	speaker_color := raylib.Color{0xd8, 0xd1, 0xbc, 0xff}
+	if line.speaker == "SARIEL" {
+		speaker_color = {0x9c, 0xc9, 0xff, 0xff}
+	} else if line.speaker == "GADREELA" {
+		speaker_color = {0xff, 0xd2, 0x75, 0xff}
+	}
+	raylib.DrawText(line.speaker, box_x + 10 + shake_x, box_y + 8 + shake_y, 10, speaker_color)
+	raylib.DrawText(line.text, box_x + 10 + shake_x, box_y + 26 + shake_y, 10, raylib.WHITE)
+
+	prompt: cstring = gamepad_active() ? "A to continue" : "ENTER to continue"
+	prompt_w := raylib.MeasureText(prompt, 6)
+	raylib.DrawText(prompt, (SCREEN_WIDTH - prompt_w) / 2, SCREEN_HEIGHT - 14, 6, {150, 150, 150, 255})
+	skip: cstring = gamepad_active() ? "B to skip" : "ESC to skip"
+	raylib.DrawText(skip, SCREEN_WIDTH - 70, 5, 6, {100, 100, 100, 255})
+}
+
+@(private = "file")
+cutscene_accept_pressed :: proc() -> bool {
+	if raylib.IsKeyPressed(.ENTER) || raylib.IsKeyPressed(.SPACE) {
+		return true
+	}
+	return gamepad_active() && raylib.IsGamepadButtonPressed(GAMEPAD_ID, .RIGHT_FACE_DOWN)
+}
+
+@(private = "file")
+cutscene_back_pressed :: proc() -> bool {
+	if raylib.IsKeyPressed(.ESCAPE) || raylib.IsKeyPressed(.BACKSPACE) {
+		return true
+	}
+	return gamepad_active() && raylib.IsGamepadButtonPressed(GAMEPAD_ID, .RIGHT_FACE_RIGHT)
+}
+
+@(private = "file")
 active_sign_count :: proc(signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign, count: int) -> int {
 	result := 0
 	for i in 0 ..< count {
@@ -514,6 +702,12 @@ shutdown :: proc() {
 	raylib.UnloadRenderTexture(gs.render_target)
 	if gs.music_loaded {
 		raylib.UnloadMusicStream(gs.music)
+	}
+	if gs.main_menu_music_loaded {
+		raylib.UnloadMusicStream(gs.main_menu_music)
+	}
+	if gs.cutscene_music_loaded {
+		raylib.UnloadMusicStream(gs.cutscene_music)
 	}
 	unload_parallax_background()
 	unload_sfx()
@@ -631,7 +825,8 @@ draw_tiled_parallax_layer :: proc(tex: raylib.Texture2D, camera_target: raylib.V
 		camera_target.y - gs.parallax_origin.y,
 	}
 	x0 := wrap_parallax_offset(-camera_delta.x * amount, w)
-	for x := x0; x < f32(SCREEN_WIDTH); x += w {
+	tile_step := w - 2
+	for x := x0; x < f32(SCREEN_WIDTH); x += tile_step {
 		raylib.DrawTexture(tex, i32(x), 0, raylib.WHITE)
 	}
 }

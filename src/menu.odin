@@ -1,7 +1,6 @@
 package game
 
 import "vendor:raylib"
-import "core:fmt"
 import "core:strings"
 
 Menu_Screen :: enum {
@@ -386,8 +385,8 @@ draw_main_menu :: proc(menu: ^Menu_State) {
 			draw_menu_button(pause_button_rect(i), label, menu.selected == i)
 		}
 	} else {
-		draw_text_centered("THE WATCHERS", SCREEN_WIDTH / 2, 66, 34, MENU_ACCENT)
-		draw_text_centered("WASD / Arrows / Gamepad to choose", SCREEN_WIDTH / 2, 104, 10, MENU_MUTED)
+		draw_text_centered("BURN THE WATCHERS", SCREEN_WIDTH / 2, 66, 34, MENU_ACCENT)
+		draw_text_centered("Gamepad Recomended", SCREEN_WIDTH / 2, 104, 10, MENU_MUTED)
 
 		labels := [?]string{"PLAY", "OPTIONS", "CONTROLS", "QUIT"}
 		for label, i in labels {
@@ -399,7 +398,7 @@ draw_main_menu :: proc(menu: ^Menu_State) {
 @(private = "file")
 draw_game_over_menu :: proc(menu: ^Menu_State) {
 	draw_text_centered("YOU DIED", SCREEN_WIDTH / 2, 82, 30, MENU_ACCENT)
-	draw_text_centered("Your body failed the mission.", SCREEN_WIDTH / 2, 120, 10, MENU_MUTED)
+	draw_text_centered("Your collected souls have vanished", SCREEN_WIDTH / 2, 120, 10, MENU_MUTED)
 
 	labels := [?]string{"TRY AGAIN", "QUIT"}
 	for label, i in labels {
@@ -410,7 +409,7 @@ draw_game_over_menu :: proc(menu: ^Menu_State) {
 @(private = "file")
 draw_victory_menu :: proc(menu: ^Menu_State) {
 	draw_text_centered("MISSION COMPLETE", SCREEN_WIDTH / 2, 82, 28, MENU_ACCENT)
-	draw_text_centered("30 cherub souls recovered.", SCREEN_WIDTH / 2, 120, 10, MENU_MUTED)
+	draw_text_centered("To be continued...", SCREEN_WIDTH / 2, 120, 10, MENU_MUTED)
 
 	labels := [?]string{"PLAY AGAIN", "MAIN MENU"}
 	for label, i in labels {
@@ -443,7 +442,7 @@ draw_controls_menu :: proc(menu: ^Menu_State) {
 		draw_control_line("Jump", "A", y + 52)
 		draw_control_line("Attack", "X", y + 72)
 		draw_control_line("Aim", "Left Trigger", y + 92)
-		draw_control_line("Cycle Target", "Right Bumper", y + 112)
+		draw_control_line("Heal", "Right Bumper", y + 112)
 		draw_control_line("Spear / Recall", "Y", y + 132)
 		draw_control_line("Teleport", "B", y + 152)
 	} else {
@@ -452,7 +451,7 @@ draw_controls_menu :: proc(menu: ^Menu_State) {
 		draw_control_line("Jump", "W / Up / Space", y + 52)
 		draw_control_line("Attack", "J", y + 72)
 		draw_control_line("Aim", "Hold K", y + 92)
-		draw_control_line("Cycle Target", "H", y + 112)
+		draw_control_line("Heal", "H", y + 112)
 		draw_control_line("Spear / Recall", "L", y + 132)
 		draw_control_line("Teleport", "I", y + 152)
 	}
@@ -480,9 +479,6 @@ draw_option_slider :: proc(menu: ^Menu_State, index: int, label: string, value: 
 	raylib.DrawRectangleRec(fill, MENU_ACCENT)
 	knob_x := track.x + track.width * clamp01(value) - 3
 	raylib.DrawRectangle(i32(knob_x), i32(track.y) - 5, 6, 18, MENU_ACCENT)
-
-	percent := fmt.tprintf("%3d%%", int(clamp01(value) * 100 + 0.5))
-	draw_text(percent, int(row.x + row.width) - 54, int(row.y) + 10, 12, MENU_MUTED)
 }
 
 @(private = "file")

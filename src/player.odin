@@ -7,6 +7,7 @@ Player :: struct {
 	pos:               raylib.Vector2, // bottom-center
 	vel:               raylib.Vector2,
 	hp:                int,
+	hp_potions:        int,
 	on_ground:         bool,
 	jumps_left:        int,
 	facing_left:       bool,
@@ -36,6 +37,7 @@ init_player :: proc(p: ^Player, spawn: raylib.Vector2) {
 	p.pos = spawn
 	p.vel = {}
 	p.hp = PLAYER_MAX_HP
+	p.hp_potions = PLAYER_START_HP_POTIONS
 	p.on_ground = false
 	p.jumps_left = MAX_JUMPS
 	p.facing_left = false
@@ -83,6 +85,19 @@ player_take_damage :: proc(p: ^Player, damage: int) {
 	play_sfx(.Hit)
 }
 
+player_use_hp_potion :: proc(p: ^Player) {
+	if p.hp_potions <= 0 || p.hp >= PLAYER_MAX_HP {
+		return
+	}
+
+	p.hp += HP_POTION_HEAL
+	if p.hp > PLAYER_MAX_HP {
+		p.hp = PLAYER_MAX_HP
+	}
+	p.hp_potions -= 1
+	play_sfx(.Player_Heal)
+}
+
 update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 	if p.hit_timer > 0 {
 		p.hit_timer -= dt
@@ -95,6 +110,10 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 		p.vel = {}
 		animate_player_teleport(p, dt)
 		return
+	}
+
+	if input_heal() {
+		player_use_hp_potion(p)
 	}
 
 	was_on_ground := p.on_ground

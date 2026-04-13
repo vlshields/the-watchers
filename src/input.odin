@@ -69,7 +69,7 @@ input_target_hold :: proc() -> bool {
 	return false
 }
 
-input_cycle_target :: proc() -> bool {
+input_heal :: proc() -> bool {
 	if raylib.IsKeyPressed(.H) {
 		return true
 	}

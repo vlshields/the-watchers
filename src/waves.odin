@@ -95,10 +95,6 @@ update_wave_encounter :: proc(
 		if wave_enemies_alive(enemies, enemy_count^) {
 			return
 		}
-		if w.current_wave >= w.total_waves {
-			w.state = .Complete
-			return
-		}
 		spawn_next_wave(w, map_data, enemies, enemy_count, camera)
 	}
 }
@@ -122,8 +118,9 @@ spawn_next_wave :: proc(
 	enemy_count: ^int,
 	camera: raylib.Camera2D,
 ) {
+	spawn_count := enemies_per_current_wave(w)
 	w.current_wave += 1
-	for _ in 0 ..< w.enemies_per_wave {
+	for _ in 0 ..< spawn_count {
 		if enemy_count^ >= MAX_ENEMIES {
 			return
 		}
@@ -137,6 +134,14 @@ spawn_next_wave :: proc(
 		e.state = .Chase
 		enemy_count^ += 1
 	}
+}
+
+@(private = "file")
+enemies_per_current_wave :: proc(w: ^Wave_Encounter) -> int {
+	if w.current_wave >= WAVE_ESCALATION_AFTER {
+		return WAVE_ESCALATED_ENEMY_COUNT
+	}
+	return w.enemies_per_wave
 }
 
 @(private = "file")

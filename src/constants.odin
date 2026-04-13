@@ -1,5 +1,5 @@
 package game
-
+import "vendor:raylib"
 SCREEN_WIDTH  :: 640
 SCREEN_HEIGHT :: 360
 TILE_SIZE     :: 16
@@ -34,6 +34,7 @@ PARALLAX_LAYER_COUNT :: 5
 
 PLAYER_MAX_HP :: 70
 PLAYER_FOOTSTEP_INTERVAL :: 0.26
+WIN_CHERUB_SOULS :: 30
 
 // Enemy
 ENEMY_CHERUB_HP            :: 40
@@ -49,6 +50,8 @@ MAX_DECORATIVE_SIGNS      :: 16
 MAX_COMBAT_TARGETS        :: MAX_ENEMIES + MAX_DECORATIVE_SIGNS
 MAX_WAVE_ENEMY_TYPES      :: 8
 WAVE_SPAWN_ATTEMPTS       :: 32
+WAVE_ESCALATION_AFTER     :: 2
+WAVE_ESCALATED_ENEMY_COUNT :: 8
 ENEMY_HP_BAR_W            :: 14
 ENEMY_HP_BAR_H            :: 2
 ENEMY_HP_BAR_Y_OFFSET     :: 4
@@ -105,3 +108,44 @@ HP_BAR_Y       :: SCREEN_HEIGHT - HP_BAR_H - 8
 HP_BAR_W       :: 64
 HP_BAR_H       :: 6
 HP_BAR_OUTLINE :: 1
+
+// Menu
+
+MENU_PANEL_X :: f32(176)
+MENU_BUTTON_X :: f32(220)
+MENU_BUTTON_W :: f32(200)
+MENU_BUTTON_H :: f32(34)
+MENU_MAIN_BUTTON_Y :: f32(138)
+MENU_ROW_GAP :: f32(44)
+MENU_OPTIONS_X :: f32(156)
+MENU_OPTIONS_W :: f32(328)
+MENU_OPTIONS_Y :: f32(112)
+MENU_SLIDER_X :: f32(284)
+MENU_SLIDER_W :: f32(146)
+MENU_SLIDER_H :: f32(8)
+GAME_OVER_BUTTON_X :: f32(220)
+GAME_OVER_BUTTON_Y :: f32(180)
+GAME_OVER_BUTTON_W :: f32(200)
+GAME_OVER_BUTTON_H :: f32(34)
+GAME_OVER_ROW_GAP :: f32(44)
+
+MENU_BG :: raylib.Color{0x10, 0x0d, 0x14, 0xff}
+MENU_PANEL :: raylib.Color{0x22, 0x1a, 0x26, 0xee}
+MENU_PANEL_LINE :: raylib.Color{0x76, 0x68, 0x72, 0xff}
+MENU_BUTTON :: raylib.Color{0x31, 0x27, 0x32, 0xff}
+MENU_BUTTON_HOVER :: raylib.Color{0x58, 0x46, 0x48, 0xff}
+MENU_ACCENT :: raylib.Color{0xd8, 0xd1, 0xbc, 0xff}
+MENU_MUTED :: raylib.Color{0xa2, 0x98, 0x9b, 0xff}
+MENU_DARK :: raylib.Color{0x0a, 0x08, 0x0c, 0xff}
+
+// Hints
+HINT_BOX_BG :: raylib.Color{0x08, 0x06, 0x0a, 0xc8}
+HINT_BOX_LINE :: raylib.Color{0xd8, 0xd1, 0xbc, 0xd8}
+HINT_TEXT :: raylib.Color{0xf2, 0xed, 0xdc, 0xff}
+HINT_LABEL :: raylib.Color{0xd8, 0xd1, 0xbc, 0xff}
+HINT_COUNT :: int(Hint_Id.Count)
+
+// HUD
+HP_BAR_COLOR         :: raylib.Color{0xf0, 0x21, 0x58, 0xff}
+HP_BAR_BG_COLOR      :: raylib.Color{0x30, 0x10, 0x18, 0xff}
+HP_BAR_OUTLINE_COLOR :: raylib.Color{0x00, 0x00, 0x00, 0xff}

@@ -42,6 +42,8 @@ Game_Mode :: enum {
 	Menu,
 	Playing,
 	Paused,
+	Game_Over,
+	Victory,
 }
 
 @(private = "file")
@@ -152,47 +154,13 @@ init :: proc() {
 	gs.bg_color = {0x1a, 0x1a, 0x2e, 0xff}
 	init_parallax_background()
 
-	// Load map
-	if !load_map_data("assets/maps/main_area_first.map") {
+	if !init_playthrough() {
 		gs.should_quit = true
 		return
 	}
-
-	// Find player spawn
-	spawn_pos := raylib.Vector2{100, 100}
-	for row, ry in gs.map_data.grid {
-		for cell, cx in row {
-			if cell.symbol == 's' {
-				td, has_meta := gs.map_data.metadata['s']
-				if has_meta {
-					spawn_key := dm.extract_kv(td.other, "spawn_point")
-					if spawn_key == "player" {
-						spawn_pos = {f32(cx) * TILE_SIZE + TILE_SIZE / 2, f32(ry) * TILE_SIZE}
-					}
-					delete(spawn_key)
-				}
-			}
-		}
-	}
-
-	init_player(&gs.player, spawn_pos)
-	init_spear(&gs.spear)
-	init_enemies(&gs.enemies, &gs.enemy_count, &gs.map_data)
-	init_decorative_signs(&gs.signs, &gs.sign_count, &gs.map_data)
-	init_wave_encounter(&gs.waves, &gs.map_data)
-	init_combat(&gs.combat)
-	init_psychic_projectiles()
 	init_sfx()
 	init_menu(&gs.menu)
-	init_hints(&gs.hints)
 	init_music()
-
-	gs.camera = raylib.Camera2D{
-		zoom   = CAMERA_ZOOM,
-		offset = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2},
-		target = spawn_pos,
-	}
-	gs.parallax_origin = gs.camera.target
 
 	// White flash shader for player damage
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
@@ -230,7 +198,7 @@ update :: proc() {
 
 	update_music()
 	update_menu_input_mode(&gs.menu)
-	if gs.mode == .Menu || gs.mode == .Paused {
+	if gs.mode == .Menu || gs.mode == .Paused || gs.mode == .Game_Over || gs.mode == .Victory {
 		update_menu(&gs.menu)
 		draw_menu_frame(&gs.menu)
 		return
@@ -270,6 +238,11 @@ update :: proc() {
 		dt,
 	)
 	collect_cherub_souls(&enemy_states_before, &gs.enemies, gs.enemy_count, &gs.cherub_souls)
+	if gs.cherub_souls >= WIN_CHERUB_SOULS {
+		enter_victory()
+		draw_menu_frame(&gs.menu)
+		return
+	}
 	update_psychic_projectiles(&gs.psy_projs, &gs.psy_proj_count, &gs.player, &gs.map_data, dt)
 	update_combat(
 		&gs.combat,
@@ -282,6 +255,11 @@ update :: proc() {
 		gs.sign_count,
 		dt,
 	)
+	if gs.player.hp <= 0 {
+		enter_game_over()
+		draw_menu_frame(&gs.menu)
+		return
+	}
 	hint_events := Hint_Events{
 		spear_summoned = prev_spear_state == .Inactive && gs.spear.state == .Spawning,
 		spear_thrown = prev_throw_phase == .None && gs.combat.throw_phase != .None,
@@ -378,6 +356,115 @@ menu_is_paused :: proc() -> bool {
 	return gs.mode == .Paused
 }
 
+menu_is_game_over :: proc() -> bool {
+	return gs.mode == .Game_Over
+}
+
+menu_is_victory :: proc() -> bool {
+	return gs.mode == .Victory
+}
+
+restart_game_from_game_over :: proc() {
+	unload_playthrough()
+	if !init_playthrough() {
+		gs.should_quit = true
+		return
+	}
+	gs.mode = .Playing
+}
+
+return_to_main_from_game_over :: proc() {
+	unload_playthrough()
+	if !init_playthrough() {
+		gs.should_quit = true
+		return
+	}
+	gs.mode = .Menu
+	gs.menu.screen = .Main
+	gs.menu.selected = 0
+}
+
+restart_game_from_victory :: proc() {
+	restart_game_from_game_over()
+}
+
+return_to_main_from_victory :: proc() {
+	return_to_main_from_game_over()
+}
+
+@(private = "file")
+enter_game_over :: proc() {
+	gs.mode = .Game_Over
+	gs.menu.screen = .Main
+	gs.menu.selected = 0
+}
+
+@(private = "file")
+enter_victory :: proc() {
+	gs.mode = .Victory
+	gs.menu.screen = .Main
+	gs.menu.selected = 0
+}
+
+@(private = "file")
+init_playthrough :: proc() -> bool {
+	if !load_map_data("assets/maps/main_area_first.map") {
+		return false
+	}
+
+	spawn_pos := find_player_spawn()
+	init_player(&gs.player, spawn_pos)
+	init_spear(&gs.spear)
+	init_enemies(&gs.enemies, &gs.enemy_count, &gs.map_data)
+	init_decorative_signs(&gs.signs, &gs.sign_count, &gs.map_data)
+	init_wave_encounter(&gs.waves, &gs.map_data)
+	init_combat(&gs.combat)
+	init_psychic_projectiles()
+	init_hints(&gs.hints)
+	gs.psy_proj_count = 0
+	gs.cherub_souls = 0
+	gs.camera = raylib.Camera2D{
+		zoom   = CAMERA_ZOOM,
+		offset = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2},
+		target = spawn_pos,
+	}
+	gs.parallax_origin = gs.camera.target
+	return true
+}
+
+@(private = "file")
+unload_playthrough :: proc() {
+	unload_map_data()
+	unload_combat()
+	unload_psychic_projectiles()
+	unload_decorative_signs()
+	unload_enemies()
+	unload_spear(&gs.spear)
+	unload_player(&gs.player)
+}
+
+@(private = "file")
+find_player_spawn :: proc() -> raylib.Vector2 {
+	spawn_pos := raylib.Vector2{100, 100}
+	for row, ry in gs.map_data.grid {
+		for cell, cx in row {
+			if cell.symbol != 's' {
+				continue
+			}
+			td, has_meta := gs.map_data.metadata['s']
+			if !has_meta {
+				continue
+			}
+			spawn_key := dm.extract_kv(td.other, "spawn_point")
+			if spawn_key == "player" {
+				spawn_pos = {f32(cx) * TILE_SIZE + TILE_SIZE / 2, f32(ry) * TILE_SIZE}
+			}
+			delete(spawn_key)
+		}
+	}
+	return spawn_pos
+}
+
 @(private = "file")
 active_sign_count :: proc(signs: ^[MAX_DECORATIVE_SIGNS]Decorative_Sign, count: int) -> int {
 	result := 0
@@ -430,13 +517,7 @@ shutdown :: proc() {
 	}
 	unload_parallax_background()
 	unload_sfx()
-	unload_map_data()
-	unload_combat()
-	unload_psychic_projectiles()
-	unload_decorative_signs()
-	unload_enemies()
-	unload_spear(&gs.spear)
-	unload_player(&gs.player)
+	unload_playthrough()
 	if raylib.IsAudioDeviceReady() {
 		raylib.CloseAudioDevice()
 	}

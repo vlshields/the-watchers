@@ -12,7 +12,7 @@ Hint_Id :: enum {
 	Count,
 }
 
-HINT_COUNT :: int(Hint_Id.Count)
+
 
 Hint_Events :: struct {
 	spear_summoned: bool,
@@ -27,10 +27,7 @@ Hints_State :: struct {
 	has_hint:  bool,
 }
 
-HINT_BOX_BG :: raylib.Color{0x08, 0x06, 0x0a, 0xc8}
-HINT_BOX_LINE :: raylib.Color{0xd8, 0xd1, 0xbc, 0xd8}
-HINT_TEXT :: raylib.Color{0xf2, 0xed, 0xdc, 0xff}
-HINT_LABEL :: raylib.Color{0xd8, 0xd1, 0xbc, 0xff}
+
 
 init_hints :: proc(hints: ^Hints_State) {
 	hints.current = .Summon_Spear

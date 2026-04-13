@@ -31,27 +31,7 @@ Menu_State :: struct {
 	dragging_slider: Menu_Slider,
 }
 
-MENU_PANEL_X :: f32(176)
-MENU_BUTTON_X :: f32(220)
-MENU_BUTTON_W :: f32(200)
-MENU_BUTTON_H :: f32(34)
-MENU_MAIN_BUTTON_Y :: f32(138)
-MENU_ROW_GAP :: f32(44)
-MENU_OPTIONS_X :: f32(156)
-MENU_OPTIONS_W :: f32(328)
-MENU_OPTIONS_Y :: f32(112)
-MENU_SLIDER_X :: f32(284)
-MENU_SLIDER_W :: f32(146)
-MENU_SLIDER_H :: f32(8)
 
-MENU_BG :: raylib.Color{0x10, 0x0d, 0x14, 0xff}
-MENU_PANEL :: raylib.Color{0x22, 0x1a, 0x26, 0xee}
-MENU_PANEL_LINE :: raylib.Color{0x76, 0x68, 0x72, 0xff}
-MENU_BUTTON :: raylib.Color{0x31, 0x27, 0x32, 0xff}
-MENU_BUTTON_HOVER :: raylib.Color{0x58, 0x46, 0x48, 0xff}
-MENU_ACCENT :: raylib.Color{0xd8, 0xd1, 0xbc, 0xff}
-MENU_MUTED :: raylib.Color{0xa2, 0x98, 0x9b, 0xff}
-MENU_DARK :: raylib.Color{0x0a, 0x08, 0x0c, 0xff}
 
 init_menu :: proc(menu: ^Menu_State) {
 	menu.screen = .Main
@@ -106,6 +86,11 @@ update_menu :: proc(menu: ^Menu_State) {
 		menu.dragging_slider = .None
 	}
 
+	if menu_is_game_over() || menu_is_victory() {
+		update_end_screen_menu(menu, mouse, mouse_valid, mouse_pressed)
+		return
+	}
+
 	if menu.screen == .Main {
 		update_main_menu(menu, mouse, mouse_valid, mouse_pressed)
 	} else if menu.screen == .Options {
@@ -117,12 +102,38 @@ update_menu :: proc(menu: ^Menu_State) {
 
 draw_menu_contents :: proc(menu: ^Menu_State) {
 	draw_menu_background(menu_is_paused() && menu.screen == .Main)
+	if menu_is_game_over() {
+		draw_game_over_menu(menu)
+		return
+	}
+	if menu_is_victory() {
+		draw_victory_menu(menu)
+		return
+	}
 	if menu.screen == .Main {
 		draw_main_menu(menu)
 	} else if menu.screen == .Options {
 		draw_options_menu(menu)
 	} else {
 		draw_controls_menu(menu)
+	}
+}
+
+@(private = "file")
+update_end_screen_menu :: proc(menu: ^Menu_State, mouse: raylib.Vector2, mouse_valid, mouse_pressed: bool) {
+	for i in 0 ..< 2 {
+		button_rect := game_over_button_rect(i)
+		if mouse_valid && raylib.CheckCollisionPointRec(mouse, button_rect) {
+			menu.selected = i
+			if mouse_pressed {
+				activate_end_screen_menu(menu)
+			}
+		}
+	}
+
+	update_vertical_selection(menu, 2)
+	if menu_accept_pressed() {
+		activate_end_screen_menu(menu)
 	}
 }
 
@@ -228,6 +239,28 @@ update_vertical_selection :: proc(menu: ^Menu_State, count: int) {
 	if menu_up_pressed() {
 		menu.selected = (menu.selected + count - 1) % count
 		play_sfx(.Ui_Confirm)
+	}
+}
+
+@(private = "file")
+activate_end_screen_menu :: proc(menu: ^Menu_State) {
+	if menu_is_game_over() {
+		if menu.selected == 0 {
+			play_sfx(.Ui_Confirm)
+			restart_game_from_game_over()
+		} else {
+			play_sfx(.Ui_Back)
+			return_to_main_from_game_over()
+		}
+		return
+	}
+
+	if menu.selected == 0 {
+		play_sfx(.Ui_Confirm)
+		restart_game_from_victory()
+	} else {
+		play_sfx(.Ui_Back)
+		return_to_main_from_victory()
 	}
 }
 
@@ -364,6 +397,28 @@ draw_main_menu :: proc(menu: ^Menu_State) {
 }
 
 @(private = "file")
+draw_game_over_menu :: proc(menu: ^Menu_State) {
+	draw_text_centered("YOU DIED", SCREEN_WIDTH / 2, 82, 30, MENU_ACCENT)
+	draw_text_centered("Your body failed the mission.", SCREEN_WIDTH / 2, 120, 10, MENU_MUTED)
+
+	labels := [?]string{"TRY AGAIN", "QUIT"}
+	for label, i in labels {
+		draw_menu_button(game_over_button_rect(i), label, menu.selected == i)
+	}
+}
+
+@(private = "file")
+draw_victory_menu :: proc(menu: ^Menu_State) {
+	draw_text_centered("MISSION COMPLETE", SCREEN_WIDTH / 2, 82, 28, MENU_ACCENT)
+	draw_text_centered("30 cherub souls recovered.", SCREEN_WIDTH / 2, 120, 10, MENU_MUTED)
+
+	labels := [?]string{"PLAY AGAIN", "MAIN MENU"}
+	for label, i in labels {
+		draw_menu_button(game_over_button_rect(i), label, menu.selected == i)
+	}
+}
+
+@(private = "file")
 draw_options_menu :: proc(menu: ^Menu_State) {
 	draw_text_centered("OPTIONS", SCREEN_WIDTH / 2, 62, 28, MENU_ACCENT)
 	draw_option_slider(menu, 0, "MUSIC", menu.music_volume)
@@ -479,6 +534,16 @@ main_button_rect :: proc(index: int) -> raylib.Rectangle {
 @(private = "file")
 pause_button_rect :: proc(index: int) -> raylib.Rectangle {
 	return {232, 136 + f32(index) * 38, 176, 30}
+}
+
+@(private = "file")
+game_over_button_rect :: proc(index: int) -> raylib.Rectangle {
+	return {
+		GAME_OVER_BUTTON_X,
+		GAME_OVER_BUTTON_Y + f32(index) * GAME_OVER_ROW_GAP,
+		GAME_OVER_BUTTON_W,
+		GAME_OVER_BUTTON_H,
+	}
 }
 
 @(private = "file")

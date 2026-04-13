@@ -282,7 +282,11 @@ activate_main_menu :: proc(menu: ^Menu_State) {
 		play_sfx(.Ui_Confirm)
 	} else {
 		play_sfx(.Ui_Back)
-		quit_from_menu()
+		if menu_is_paused() {
+			return_to_main_from_game_over()
+		} else {
+			quit_from_menu()
+		}
 	}
 }
 

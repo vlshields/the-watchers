@@ -1,0 +1,9 @@
+v1.0.1 (current)
+-----------------------------------
+
+- Fixed critical bug where the game would freeze if the player cycled through the dialogue boxes.
+
+- Fixed bug where the QUIT option in the pause menu did not do anything. It now brings the player
+to the main menu.
+
+- The game now displays a clear objective in the hud at the top of the screen

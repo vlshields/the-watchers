@@ -43,7 +43,7 @@ init_sfx :: proc() {
 	load_sfx(.Player_Spear_Traveling, "assets/audio/sfx/player_spear_traveling.wav", 0.55)
 	load_sfx(.Player_Teleport, "assets/audio/sfx/player_teleport.wav", 0.7)
 	load_sfx(.Player_Teleport_Slam_Impact, "assets/audio/sfx/player_teleport_slam_impact.wav", 0.8)
-	load_sfx(.Player_Heal, "assets/audio/sfx/chuck-session(Sun Apr 12 19h35m29 2026).wav", 0.7)
+	load_sfx(.Player_Heal, "assets/audio/sfx/player_drinks_potion.wav", 0.7)
 	load_sfx(.Enemy_Cherub_Attack, "assets/audio/sfx/enemy_cherub_attack.wav", 0.65)
 	load_sfx(.Enemy_Ghoul_Attack, "assets/audio/sfx/enemy_ghoul_attacks.wav", 0.7)
 	load_sfx(.Enemy_Mutant_Cherub_Aggroed, "assets/audio/sfx/enemy_mutant_cherub_agroed.wav.wav", 0.65)

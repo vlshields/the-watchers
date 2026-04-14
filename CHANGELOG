@@ -1,4 +1,13 @@
-v1.0.2 (current)
+
+v1.0.3 (current)
+-----------------------------------
+- added aparticle trail on player movement.
+
+- there is now a screenshake effect for when the player colides with an enemy with the teleport
+
+- fixed blurry platform tile
+
+v1.0.2 
 -----------------------------------
 
 - Lowered the win condition from 30 cherub souls to 20.

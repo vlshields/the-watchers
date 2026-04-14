@@ -132,6 +132,9 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 	// Jump (double jump)
 	if p.jumps_left > 0 && input_jump() {
 		p.vel.y = JUMP_VELOCITY
+		if was_on_ground {
+			spawn_dust_jump(p.pos)
+		}
 		p.on_ground = false
 		p.jumps_left -= 1
 		play_sfx(.Player_Jump)
@@ -143,7 +146,11 @@ update_player :: proc(p: ^Player, map_data: ^dm.Dot_Map, dt: f32) {
 		p.vel.y = MAX_FALL_SPEED
 	}
 
+	pre_collide_vy := p.vel.y
 	move_and_collide(p, map_data, dt)
+	if !was_on_ground && p.on_ground && pre_collide_vy > 60 {
+		spawn_dust_land(p.pos, pre_collide_vy)
+	}
 
 	// Facing
 	was_moving := p.moving
@@ -262,6 +269,7 @@ update_player_footsteps :: proc(p: ^Player, dt: f32) {
 	p.footstep_timer -= dt
 	if p.footstep_timer <= 0 {
 		play_sfx(.Player_Footstep)
+		spawn_dust_step(p.pos, p.facing_left)
 		p.footstep_timer = PLAYER_FOOTSTEP_INTERVAL
 	}
 }

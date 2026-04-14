@@ -42,6 +42,7 @@ Game_State :: struct {
 	bg_color:      raylib.Color,
 	cutscene_line: int,
 	cutscene_shake: f32,
+	screen_shake:  f32,
 	cutscene_played: bool,
 }
 
@@ -282,6 +283,7 @@ update :: proc() {
 		sign_used = active_sign_count(&gs.signs, gs.sign_count) < prev_active_signs,
 	}
 	update_decorative_signs(&gs.signs, gs.sign_count, &gs.player)
+	update_dust_particles(dt)
 	update_camera(dt)
 	update_hints(
 		&gs.hints,
@@ -302,6 +304,7 @@ update :: proc() {
 	raylib.BeginMode2D(gs.camera)
 	draw_map(gs.camera)
 	draw_decorative_signs(&gs.signs, gs.sign_count)
+	draw_dust_particles()
 	draw_enemies(&gs.enemies, gs.enemy_count, gs.hit_flash_shader)
 	draw_psychic_projectiles(&gs.psy_projs, gs.psy_proj_count)
 	player_flashing := gs.player.hit_timer > 0 && int(gs.player.hit_timer / 0.05) % 2 == 0
@@ -540,6 +543,7 @@ init_playthrough :: proc() -> bool {
 	init_wave_encounter(&gs.waves, &gs.map_data)
 	init_combat(&gs.combat)
 	init_psychic_projectiles()
+	init_dust_particles()
 	init_hints(&gs.hints)
 	gs.psy_proj_count = 0
 	gs.cherub_souls = 0
@@ -894,6 +898,21 @@ update_camera :: proc(dt: f32) {
 	eased := raylib.EaseCubicOut(t, 0, 1, 1)
 	gs.camera.target.x += (desired.x - gs.camera.target.x) * eased
 	gs.camera.target.y += (desired.y - gs.camera.target.y) * eased
+
+	if gs.screen_shake > 0 {
+		gs.screen_shake -= dt
+		if gs.screen_shake < 0 {
+			gs.screen_shake = 0
+		}
+		intensity := gs.screen_shake / SCREEN_SHAKE_DURATION
+		mag := SCREEN_SHAKE_MAGNITUDE * intensity
+		gs.camera.target.x += rand.float32_range(-mag, mag)
+		gs.camera.target.y += rand.float32_range(-mag, mag)
+	}
+}
+
+trigger_screen_shake :: proc() {
+	gs.screen_shake = SCREEN_SHAKE_DURATION
 }
 
 // ---------------------------------------------------------------------------

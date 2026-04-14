@@ -97,6 +97,7 @@ update_combat :: proc(
 			if strike_target >= 0 {
 				enemy_take_teleport_strike(&enemies[strike_target], knockback_dir)
 				play_sfx(.Player_Teleport_Slam_Impact)
+				trigger_screen_shake()
 			}
 			if c.target_kind == .Sign && c.target_index >= 0 && c.target_index < sign_count {
 				signs[c.target_index].active = false
